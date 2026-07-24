@@ -19,16 +19,21 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
 
-/// Bridges ML Kit GenAI Speech Recognition (a Kotlin coroutine/Flow API) to Flutter.
+/// Bridges ML Kit GenAI Speech Recognition to Flutter.
 /// - MethodChannel "speech/methods": start / stop.
-/// - EventChannel  "speech/events" : streams recognized text (and status/errors) to Dart.
+/// - EventChannel  "speech/events" : {"type": ..., "text": ...} maps.
+///
+/// Partial results are collected here and sent as one "transcript" event on stop.
 class MainActivity : FlutterActivity() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var recognizer: SpeechRecognizer? = null
     private var recognitionJob: Job? = null
     private var events: EventChannel.EventSink? = null
+    private val segments = mutableListOf<String>()
+    private var partial = ""
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -61,12 +66,15 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun emit(message: String) {
-        events?.success(message)
+    private fun emit(type: String, text: String) {
+        events?.success(mapOf("type" to type, "text" to text))
     }
 
     private fun start() {
         if (recognitionJob != null) return
+
+        segments.clear()
+        partial = ""
 
         val options = speechRecognizerOptions { locale = Locale.US }
         val client = SpeechRecognition.getClient(options).also { recognizer = it }
@@ -74,50 +82,62 @@ class MainActivity : FlutterActivity() {
         recognitionJob = scope.launch {
             try {
                 val status = client.checkStatus()
-                emit("status: $status")
+                emit("status", "feature status: $status")
 
                 if (status == FeatureStatus.DOWNLOADABLE || status == FeatureStatus.DOWNLOADING) {
-                    emit("downloading model...")
+                    emit("status", "downloading model...")
                     client.download().collect { d ->
                         when (d) {
-                            is DownloadStatus.DownloadCompleted -> emit("download completed")
-                            is DownloadStatus.DownloadFailed -> emit("download failed: ${d.e}")
+                            is DownloadStatus.DownloadCompleted -> emit("status", "download completed")
+                            is DownloadStatus.DownloadFailed -> emit("error", "download failed: ${d.e}")
                             else -> {}
                         }
                     }
                 }
 
+                emit("status", "listening")
+
                 val request = speechRecognizerRequest { audioSource = AudioSource.fromMic() }
                 client.startRecognition(request).collect { response ->
                     when (response) {
-                        is SpeechRecognizerResponse.PartialTextResponse -> emit(response.text)
-                        is SpeechRecognizerResponse.FinalTextResponse -> emit(response.text)
-                        is SpeechRecognizerResponse.ErrorResponse -> emit("error: ${response.e}")
+                        is SpeechRecognizerResponse.PartialTextResponse -> partial = response.text
+                        is SpeechRecognizerResponse.FinalTextResponse -> {
+                            segments.add(response.text)
+                            partial = ""
+                        }
+                        is SpeechRecognizerResponse.ErrorResponse -> emit("error", "${response.e}")
                         else -> {}
                     }
                 }
             } catch (e: Exception) {
-                emit("error: $e")
+                emit("error", "$e")
             }
         }
     }
 
     private fun stop() {
         val client = recognizer ?: return
+        val job = recognitionJob
+        recognizer = null
+        recognitionJob = null
+
         scope.launch {
             try {
                 client.stopRecognition()
             } catch (_: Exception) {
             }
-            recognitionJob?.cancel()
-            recognitionJob = null
+            withTimeoutOrNull(3000) { job?.join() }
+            job?.cancel()
             client.close()
-            recognizer = null
+
+            val text = (segments + partial).filter { it.isNotBlank() }.joinToString(" ")
+            emit("transcript", text)
         }
     }
 
     override fun onDestroy() {
         scope.cancel()
+        recognitionJob = null
         recognizer?.close()
         recognizer = null
         super.onDestroy()
