@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,6 +8,7 @@ import 'package:flutter_gemma_litertlm/flutter_gemma_litertlm.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'model_download.dart';
+import 'reminder_extractor.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -88,12 +90,15 @@ class _SpeechScreenState extends State<SpeechScreen> {
   static const _methods = MethodChannel('speech/methods');
   static const _events = EventChannel('speech/events');
 
+  final _extractor = ReminderExtractor();
   StreamSubscription<dynamic>? _subscription;
   bool _recording = false;
+  bool _thinking = false;
 
   @override
   void dispose() {
     _subscription?.cancel();
+    _extractor.close();
     super.dispose();
   }
 
@@ -115,13 +120,24 @@ class _SpeechScreenState extends State<SpeechScreen> {
     setState(() => _recording = true);
   }
 
-  void _onEvent(dynamic event) {
+  Future<void> _onEvent(dynamic event) async {
     final type = event['type'];
     final text = event['text'];
-    if (type == 'transcript') {
-      debugPrint('Recognized: $text');
-    } else if (type == 'error') {
+    if (type == 'error') {
       debugPrint('Recognition error: $text');
+      return;
+    }
+    if (type != 'transcript') return;
+
+    debugPrint('Recognized: $text');
+    setState(() => _thinking = true);
+    try {
+      final reminder = await _extractor.extract(text as String);
+      debugPrint('Reminder JSON: ${reminder == null ? 'none' : jsonEncode(reminder)}');
+    } catch (e) {
+      debugPrint('Extraction failed: $e');
+    } finally {
+      if (mounted) setState(() => _thinking = false);
     }
   }
 
@@ -129,11 +145,13 @@ class _SpeechScreenState extends State<SpeechScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Center(
-        child: IconButton(
-          onPressed: _toggle,
-          iconSize: 96,
-          icon: Icon(_recording ? Icons.stop : Icons.mic),
-        ),
+        child: _thinking
+            ? const CircularProgressIndicator()
+            : IconButton(
+                onPressed: _toggle,
+                iconSize: 96,
+                icon: Icon(_recording ? Icons.stop : Icons.mic),
+              ),
       ),
     );
   }
