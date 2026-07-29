@@ -45,8 +45,8 @@ class ReminderExtractor {
       'The "activity" represents what the user must be doing to trigger reminder. '
       'The "activity" is one of ${activities.join(', ')}. '
       'For example driving a car is IN_VEHICLE. '
-      'Use null if no activity fits.\n\n'
+      'Use null if no activity fits.\n'
       'The "condition" is the time or activity as said in the reminder. '
-      'For example "tomorrow afternoon".\n'
+      'For example "tomorrow afternoon" or "next time I drive".\n\n'
       'Reminder: "$transcript"\n';
 }
