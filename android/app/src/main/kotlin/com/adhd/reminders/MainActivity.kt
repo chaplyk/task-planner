@@ -1,4 +1,4 @@
-package com.taskplanner.task_planner
+package com.adhd.reminders
 
 import com.google.mlkit.genai.common.DownloadStatus
 import com.google.mlkit.genai.common.FeatureStatus
