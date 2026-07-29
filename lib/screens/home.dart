@@ -6,6 +6,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../models/reminder.dart';
+import '../notifications.dart';
 import '../reminder_extractor.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -27,6 +28,21 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _events.receiveBroadcastStream().listen(_onEvent);
+    _rescheduleAllNotifications();
+  }
+
+  // Pull notifications from Firebase and recreate notifications
+  Future<void> _rescheduleAllNotifications() async {
+    final snapshot = await _reminders.where('status', isEqualTo: 'pending').get();
+    for (final doc in snapshot.docs) {
+      final when = doc.data()['when'] as Timestamp?;
+      if (when == null) continue;
+      await scheduleNotification(
+        int.parse(doc.id),
+        doc.data()['summary'],
+        when.toDate(),
+      );
+    }
   }
 
   Future<void> _signOut() async {
@@ -85,6 +101,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _save(Reminder? reminder) async {
     final id = DateTime.now().difference(DateTime.utc(2026)).inSeconds;
     await _reminders.doc('$id').set(reminder?.toMap() ?? {});
+    if (reminder?.when != null) {
+      await scheduleNotification(id, reminder!.summary, reminder.when!);
+    }
   }
 
   @override

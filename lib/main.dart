@@ -5,6 +5,7 @@ import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:flutter_gemma_litertlm/flutter_gemma_litertlm.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import 'notifications.dart';
 import 'screens/onboarding.dart';
 import 'screens/startup.dart';
 
@@ -13,6 +14,7 @@ Future<void> main() async {
   await Firebase.initializeApp();
   await GoogleSignIn.instance.initialize();
   await FlutterGemma.initialize(inferenceEngines: [LiteRtLmEngine()]);
+  await initNotifications();
   runApp(const MyApp());
 }
 
