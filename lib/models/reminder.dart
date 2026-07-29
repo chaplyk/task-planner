@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class Reminder {
   const Reminder({required this.summary, this.when, this.whenString});
   final String summary;
@@ -24,6 +26,16 @@ class Reminder {
     'summary': summary,
     'when': when?.toIso8601String(),
     'when_string': whenString,
+  };
+
+  /// Draft of Reminder object
+  Map<String, dynamic> toMap() => {
+    'summary': summary,
+    'when': when == null ? null : Timestamp.fromDate(when!),
+    'whenString': whenString,
+    'status': 'pending',
+    'triggerType': 'time',
+    'createdAt': Timestamp.now(),
   };
 
   /// Parses a raw model output string into a [Reminder]

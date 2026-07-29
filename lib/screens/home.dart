@@ -1,9 +1,11 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../models/reminder.dart';
 import '../reminder_extractor.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -60,15 +62,24 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    debugPrint('Recognized: ${event['text']}');
     setState(() => _thinking = true);
     try {
       final reminder = await _extractor.extract(event['text']);
       debugPrint('Reminder: $reminder');
+      await _save(reminder);
     } catch (e) {
       debugPrint('Extraction failed: $e');
     }
     setState(() => _thinking = false);
+  }
+
+  Future<void> _save(Reminder? reminder) async {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('reminders')
+        .add(reminder?.toMap() ?? {});
   }
 
   @override
