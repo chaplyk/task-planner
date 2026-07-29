@@ -15,6 +15,7 @@ Future<void> main() async {
   await GoogleSignIn.instance.initialize();
   await FlutterGemma.initialize(inferenceEngines: [LiteRtLmEngine()]);
   await initNotifications();
+  await askNotificationPermission();
   runApp(const MyApp());
 }
 

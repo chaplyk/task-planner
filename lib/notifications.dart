@@ -1,17 +1,27 @@
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter/foundation.dart';
 
-Future<void> initNotifications() async {
-  await AwesomeNotifications().initialize(null, [
-    NotificationChannel(
-      channelKey: 'reminders',
-      channelName: 'Reminders',
-      channelDescription: 'Test channel for reminders',
-      importance: NotificationImportance.Max,
-    ),
-  ]);
-  await AwesomeNotifications().requestPermissionToSendNotifications();
-}
+Future<void> initNotifications() => AwesomeNotifications().initialize(null, [
+  NotificationChannel(
+    channelKey: 'reminders',
+    channelName: 'Reminders',
+    channelDescription: 'Test channel for reminders',
+    importance: NotificationImportance.Max,
+  ),
+]);
+
+Future<void> askNotificationPermission() =>
+    AwesomeNotifications().requestPermissionToSendNotifications();
+
+Future<void> showNotification(int id, String summary) =>
+    AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: id,
+        channelKey: 'reminders',
+        title: 'Reminder',
+        body: summary,
+      ),
+    );
 
 Future<void> scheduleNotification(int id, String summary, DateTime when) async {
   if (when.isBefore(DateTime.now())) {
