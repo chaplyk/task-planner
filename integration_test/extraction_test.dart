@@ -21,7 +21,7 @@ void main() {
 
     debugPrint('summary: ${reminder?.summary}');
     debugPrint('when: ${reminder?.when}');
-    debugPrint('when_string: ${reminder?.whenString}');
+    debugPrint('when_string: ${reminder?.condition}');
 
     expect(reminder, isNotNull);
   });

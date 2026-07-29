@@ -5,9 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../collections.dart';
 import '../models/reminder.dart';
 import '../notifications.dart';
 import '../reminder_extractor.dart';
+import '../screens/reminders.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -31,9 +33,8 @@ class _HomeScreenState extends State<HomeScreen> {
     _rescheduleAllNotifications();
   }
 
-  // Pull notifications from Firebase and recreate notifications
   Future<void> _rescheduleAllNotifications() async {
-    final snapshot = await _reminders.where('status', isEqualTo: 'pending').get();
+    final snapshot = await reminders().where('status', isEqualTo: 'pending').get();
     for (final doc in snapshot.docs) {
       final when = doc.data()['when'] as Timestamp?;
       if (when == null) continue;
@@ -89,20 +90,12 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _thinking = false);
   }
 
-  CollectionReference<Map<String, dynamic>> get _reminders {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-    return FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .collection('reminders');
-  }
-
   // Integer ID for Firestore - seconds since 2026
   Future<void> _save(Reminder? reminder) async {
     final id = DateTime.now().difference(DateTime.utc(2026)).inSeconds;
-    await _reminders.doc('$id').set(reminder?.toMap() ?? {});
-    if (reminder?.when != null) {
-      await scheduleNotification(id, reminder!.summary, reminder.when!);
+    await reminders().doc('$id').set(reminder?.toMap() ?? {});
+    if (reminder?.when != null && reminder!.triggerType == 'time') {
+      await scheduleNotification(id, reminder.summary, reminder.when!);
     }
   }
 
@@ -112,6 +105,15 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('Smart Reminder App'),
         actions: [
+          IconButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const RemindersScreen()),
+              );
+            },
+            icon: const Icon(Icons.checklist),
+          ),
           IconButton(onPressed: _signOut, icon: const Icon(Icons.logout)),
         ],
       ),
