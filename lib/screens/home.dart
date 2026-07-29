@@ -73,13 +73,18 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _thinking = false);
   }
 
-  Future<void> _save(Reminder? reminder) async {
+  CollectionReference<Map<String, dynamic>> get _reminders {
     final uid = FirebaseAuth.instance.currentUser!.uid;
-    await FirebaseFirestore.instance
+    return FirebaseFirestore.instance
         .collection('users')
         .doc(uid)
-        .collection('reminders')
-        .add(reminder?.toMap() ?? {});
+        .collection('reminders');
+  }
+
+  // Integer ID for Firestore - seconds since 2026
+  Future<void> _save(Reminder? reminder) async {
+    final id = DateTime.now().difference(DateTime.utc(2026)).inSeconds;
+    await _reminders.doc('$id').set(reminder?.toMap() ?? {});
   }
 
   @override
