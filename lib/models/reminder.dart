@@ -3,13 +3,19 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Reminder {
-  const Reminder({required this.summary, this.when, this.whenString});
+  const Reminder({
+    required this.summary,
+    this.when,
+    this.whenString,
+    this.transcript,
+  });
   final String summary;
   final DateTime? when;
   final String? whenString;
+  final String? transcript;
 
-  /// Parse a decoded JSON map
-  factory Reminder.fromJson(Map<String, dynamic> json) {
+  // Parse a decoded JSON map
+  factory Reminder.fromJson(Map<String, dynamic> json, {String? transcript}) {
     final dynamic summary = json['summary'];
     final dynamic when = json['when'];
     final dynamic whenString = json['when_string'];
@@ -19,6 +25,7 @@ class Reminder {
       whenString: whenString is String && whenString.isNotEmpty
           ? whenString
           : null,
+      transcript: transcript,
     );
   }
 
@@ -28,24 +35,25 @@ class Reminder {
     'when_string': whenString,
   };
 
-  /// Draft of Reminder object
+  // Draft of Reminder object
   Map<String, dynamic> toMap() => {
     'summary': summary,
     'when': when == null ? null : Timestamp.fromDate(when!),
     'whenString': whenString,
+    'transcript': transcript,
     'status': 'pending',
     'triggerType': 'time',
     'createdAt': Timestamp.now(),
   };
 
-  /// Parses a raw model output string into a [Reminder]
-  static Reminder? tryParse(String raw) {
+  // Parse model output and transcript into Reminder
+  static Reminder? tryParse(String raw, {String? transcript}) {
     final jsonSlice = _extractJsonObject(raw);
     if (jsonSlice == null) return null;
     try {
       final decoded = jsonDecode(jsonSlice);
       if (decoded is! Map<String, dynamic>) return null;
-      final reminder = Reminder.fromJson(decoded);
+      final reminder = Reminder.fromJson(decoded, transcript: transcript);
       return reminder.summary.isEmpty ? null : reminder;
     } on FormatException {
       return null;
@@ -70,15 +78,16 @@ class Reminder {
 
   @override
   String toString() =>
-      'Reminder(summary: $summary, when: $when, whenString: $whenString)';
+      'Reminder(summary: $summary, when: $when, whenString: $whenString, transcript: $transcript)';
 
   @override
   bool operator ==(Object other) =>
       other is Reminder &&
       other.summary == summary &&
       other.when == when &&
-      other.whenString == whenString;
+      other.whenString == whenString &&
+      other.transcript == transcript;
 
   @override
-  int get hashCode => Object.hash(summary, when, whenString);
+  int get hashCode => Object.hash(summary, when, whenString, transcript);
 }

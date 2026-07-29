@@ -24,7 +24,7 @@ class ReminderExtractor {
       await session.addQueryChunk(Message(text: _prompt(transcript), isUser: true));
       final raw = await session.getResponse();
       debugPrint('Model output: $raw');
-      return Reminder.tryParse(raw);
+      return Reminder.tryParse(raw, transcript: transcript);
     } finally {
       await session.close();
     }
