@@ -18,7 +18,7 @@ class ReminderExtractor {
     final session = await _model!.createSession(
       temperature: 0.1,
       systemInstruction: _systemInstruction,
-      maxOutputTokens: 128,
+      maxOutputTokens: 256,
     );
     try {
       await session.addQueryChunk(Message(text: _prompt(transcript), isUser: true));
@@ -37,12 +37,16 @@ class ReminderExtractor {
 
   String _prompt(String transcript) =>
       'Extract the task from the reminder into '
-      '{"summary": "...", "when": null, "when_string": null}.\n'
+      '{"summary": "...", "when": null, "condition": null, "activity": null}.\n'
       'The summary is short and imperative, without any time or place.\n'
       'If time mentioned, fill the "when" accordingly.\n'
       'Today is ${DateTime.now().toIso8601String()}.\n'
       'The "when" is an ISO 8601 datetime, for example "2026-04-20T09:00:00".\n'
-      'The "when_string" is the time as said in the reminder, '
-      'for example "tomorrow afternoon".\n\n'
+      'The "activity" represents what the user must be doing to trigger reminder. '
+      'The "activity" is one of ${activities.join(', ')}. '
+      'For example driving a car is IN_VEHICLE. '
+      'Use null if no activity fits.\n\n'
+      'The "condition" is the time or activity as said in the reminder. '
+      'For example "tomorrow afternoon".\n'
       'Reminder: "$transcript"\n';
 }
