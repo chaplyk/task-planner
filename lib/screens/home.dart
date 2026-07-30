@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../activity_watch.dart';
 import '../collections.dart';
 import '../models/reminder.dart';
 import '../notifications.dart';
@@ -31,6 +32,17 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _events.receiveBroadcastStream().listen(_onEvent);
     _rescheduleAllNotifications();
+    _watchActivity();
+  }
+
+  Future<void> _watchActivity() async {
+    final status = await Permission.activityRecognition.request();
+    print('Activity permission: $status');
+    if (!status.isGranted) {
+      print('Activity watch not started (permission denied)');
+      return;
+    }
+    await startActivityWatch();
   }
 
   Future<void> _rescheduleAllNotifications() async {

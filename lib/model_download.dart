@@ -20,7 +20,6 @@ Future<void> downloadModel({void Function(int percent)? onProgress}) async {
   )
       .fromNetwork(_modelUrl, foreground: true)
       .withProgress((percent) {
-        debugPrint('Downloading: $percent%');
         onProgress?.call(percent);
       })
       .install();
