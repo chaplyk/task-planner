@@ -12,25 +12,26 @@ class _RemindersScreenState extends State<RemindersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-              child: 
-                FutureBuilder(
-                  future: reminders().get(),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) {
-                      return const CircularProgressIndicator();
-                    }
-                    return Text(
-                      snapshot.data!.docs
-                          .map((doc) {
-                            if (doc.data()['status'] == 0) {
-                              return '${doc.data()['summary']} ${doc.data()['triggerType']}';
-                            }
-                          }).join('\n'),
-                    );
-                  },
-                ),
-            ),
+      body: StreamBuilder(
+        stream: reminders().where('status', isEqualTo: 0).snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          return ListView(
+            children: snapshot.data!.docs
+                .map(
+                  (doc) => CheckboxListTile(
+                    value: false,
+                    title: Text(doc.data()['summary']),
+                    subtitle: Text(doc.data()['condition'] ?? ''),
+                    onChanged: (_) => doc.reference.update({'status': 1}),
+                  ),
+                )
+                .toList(),
+          );
+        },
+      ),
     );
   }
 }
