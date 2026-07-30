@@ -1,4 +1,4 @@
-package com.adhd.reminders
+package com.chaplyk.memory
 
 import com.google.mlkit.genai.common.DownloadStatus
 import com.google.mlkit.genai.common.FeatureStatus

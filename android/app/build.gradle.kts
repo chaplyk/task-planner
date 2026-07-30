@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "com.adhd.reminders"
+    namespace = "com.chaplyk.memory"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -21,7 +21,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.adhd.reminders"
+        applicationId = "com.chaplyk.memory"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = maxOf(26, flutter.minSdkVersion)
