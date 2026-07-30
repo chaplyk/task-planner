@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_activity_recognition/flutter_activity_recognition.dart';
-import 'package:flutter/foundation.dart';
 import 'notifications.dart';
 
 ActivityType _activity = ActivityType.UNKNOWN;
