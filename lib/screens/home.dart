@@ -10,7 +10,6 @@ import '../collections.dart';
 import '../models/reminder.dart';
 import '../notifications.dart';
 import '../reminder_extractor.dart';
-import '../screens/reminders.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -36,12 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _watchActivity() async {
-    final status = await Permission.activityRecognition.request();
-    print('Activity permission: $status');
-    if (!status.isGranted) {
-      print('Activity watch not started (permission denied)');
-      return;
-    }
+    await Permission.activityRecognition.request();
     await startActivityWatch();
   }
 
@@ -117,15 +111,6 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('NagadAI'),
         actions: [
-          IconButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const RemindersScreen()),
-              );
-            },
-            icon: const Icon(Icons.checklist),
-          ),
           IconButton(onPressed: _signOut, icon: const Icon(Icons.logout)),
         ],
       ),

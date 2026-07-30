@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'home.dart';
 import '../model_download.dart';
+import 'root_screen.dart';
 
 class StartupScreen extends StatefulWidget {
   const StartupScreen({super.key});
@@ -35,7 +35,7 @@ class _StartupScreenState extends State<StartupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_ready) return const HomeScreen();
+    if (_ready) return const RootScreen();
 
     return Scaffold(
       body: Padding(
