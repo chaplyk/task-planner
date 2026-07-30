@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 
 import 'models/reminder.dart';
+import 'collections.dart';
 
 const _systemInstruction =
     'You convert reminders into JSON. Reply with JSON only, no explanations.';
@@ -9,11 +10,15 @@ const _systemInstruction =
 // Converts text into a JSON using LLM
 class ReminderExtractor {
   InferenceModel? _model;
+  String categories = '';
 
   Future<Reminder?> extract(String transcript) async {
     if (transcript.trim().isEmpty) return null;
 
     _model ??= await FlutterGemma.getActiveModel(maxTokens: 1024);
+
+    final categoryDocs = await categoriesCollection().get();
+    categories = categoryDocs.docs.map((doc) => doc['name'] as String).join(', ');
 
     final session = await _model!.createSession(
       temperature: 0.1,
@@ -37,7 +42,7 @@ class ReminderExtractor {
 
   String _prompt(String transcript) =>
       'Extract the task from the reminder into '
-      '{"summary": "...", "when": null, "condition": null, "activity": null}.\n'
+      '{"summary": "...", "when": null, "condition": null, "activity": null, "category": null}.\n'
       'The summary is short and imperative, without any time or place.\n'
       'If time mentioned, fill the "when" accordingly.\n'
       'Today is ${DateTime.now().toIso8601String()}.\n'
@@ -47,6 +52,8 @@ class ReminderExtractor {
       'For example driving a car is IN_VEHICLE. '
       'Use null if no activity fits.\n'
       'The "condition" is the time or activity as said in the reminder. '
-      'For example "tomorrow afternoon" or "next time I drive".\n\n'
+      'For example "tomorrow afternoon" or "next time I drive".\n'
+      'The "category" is the type of task.\n'
+      'The "category" is one of $categories or "other".\n\n'
       'Reminder: "$transcript"\n';
 }

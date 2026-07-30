@@ -1,10 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-CollectionReference<Map<String, dynamic>> reminders() {
+DocumentReference<Map<String, dynamic>> userDoc() {
   final uid = FirebaseAuth.instance.currentUser!.uid;
-  return FirebaseFirestore.instance
-      .collection('users')
-      .doc(uid)
-      .collection('reminders');
+  return FirebaseFirestore.instance.collection('users').doc(uid);
 }
+
+CollectionReference<Map<String, dynamic>> reminders() {
+  return userDoc().collection('reminders');
+}
+
+CollectionReference<Map<String, dynamic>> categoriesCollection() {
+  return userDoc().collection('categories');
+}
+
