@@ -22,9 +22,11 @@ class _RemindersScreenState extends State<RemindersScreen> {
                     }
                     return Text(
                       snapshot.data!.docs
-                          .map((doc) => 
-                            '${doc.data()['summary']} ${doc.data()['triggerType']} (${doc.data()['status']})')
-                          .join('\n'),
+                          .map((doc) {
+                            if (doc.data()['status'] == 0) {
+                              return '${doc.data()['summary']} ${doc.data()['triggerType']}';
+                            }
+                          }).join('\n'),
                     );
                   },
                 ),

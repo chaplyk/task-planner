@@ -3,8 +3,8 @@ import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:flutter_gemma_litertlm/flutter_gemma_litertlm.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:task_planner/model_download.dart';
-import 'package:task_planner/reminder_extractor.dart';
+import 'package:nagadai/model_download.dart';
+import 'package:nagadai/reminder_extractor.dart';
 
 const _transcript =
     "Remind me to buy a milk tomorrow afternoon because I will be baking a cake "

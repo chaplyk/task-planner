@@ -34,7 +34,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _rescheduleAllNotifications() async {
-    final snapshot = await reminders().where('status', isEqualTo: 'pending').get();
+    final snapshot = await reminders().where('status', isEqualTo: 0).get();
     for (final doc in snapshot.docs) {
       final when = doc.data()['when'] as Timestamp?;
       if (when == null) continue;
@@ -103,7 +103,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Smart Reminder App'),
+        title: const Text('NagadAI'),
         actions: [
           IconButton(
             onPressed: () {

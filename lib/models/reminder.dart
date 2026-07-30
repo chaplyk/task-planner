@@ -51,7 +51,7 @@ class Reminder {
     'when': when == null ? null : Timestamp.fromDate(when!),
     'condition': condition,
     'transcript': transcript,
-    'status': 'pending',
+    'status': 0,
     'triggerType': triggerType,
     'activity': activity,
     'createdAt': Timestamp.now(),
