@@ -39,9 +39,7 @@ We do not sell your personal information, and we do not use your data for advert
 
 ## Data Sharing
 
-We do not share your personal information with third parties, except:
-- **Google Firebase** (Authentication and Firestore database), which stores your account and reminder data on our behalf, subject to [Google's Privacy Policy](https://policies.google.com/privacy)
-- **Google ML Kit**, which performs on-device speech recognition
+We do not share your personal information with third parties, except for **Google Firebase** (Authentication and Firestore database), which stores your account and reminder data on our behalf, subject to [Google's Privacy Policy](https://policies.google.com/privacy)
 
 We do not share your data with advertisers or analytics companies.
 
