@@ -9,6 +9,16 @@ class RemindersScreen extends StatefulWidget {
 }
 
 class _RemindersScreenState extends State<RemindersScreen> {
+  final _checkedIds = <String>{};
+
+  void _setChecked(String docId, dynamic docRef, bool checked) {
+    setState(() => checked ? _checkedIds.add(docId) : _checkedIds.remove(docId));
+    if (!checked) return;
+    Future.delayed(const Duration(milliseconds: 2000), () {
+      if (_checkedIds.contains(docId)) docRef.update({'status': 1});
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -21,12 +31,18 @@ class _RemindersScreenState extends State<RemindersScreen> {
           return ListView(
             children: snapshot.data!.docs
                 .map(
-                  (doc) => CheckboxListTile(
-                    value: false,
-                    title: Text(doc.data()['summary']),
-                    subtitle: Text(doc.data()['condition'] ?? ''),
-                    onChanged: (_) => doc.reference.update({'status': 1}),
-                  ),
+                  (doc) {
+                    final checked = _checkedIds.contains(doc.id);
+                    return ListTile(
+                      leading: Checkbox(
+                        value: checked,
+                        onChanged: (value) => _setChecked(doc.id, doc.reference, value ?? false),
+                      ),
+                      title: Text(doc.data()['summary']),
+                      subtitle: Text(doc.data()['condition'] ?? ''),
+                      trailing: Chip(label: Text(doc.data()['category'] ?? '')),
+                    );
+                  },
                 )
                 .toList(),
           );
