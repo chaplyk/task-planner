@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 
-import 'models/reminder.dart';
-import 'collections.dart';
+import '../models/reminder.dart';
+import '../collections.dart';
 
 const _systemInstruction =
     'You convert reminders into JSON. Reply with JSON only, no explanations.';

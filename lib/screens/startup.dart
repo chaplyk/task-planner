@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../model_download.dart';
+import '../gemma/download.dart';
 import 'root.dart';
 
 class StartupScreen extends StatefulWidget {
