@@ -75,10 +75,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         const Divider(),
         const ListTile(
-          title: Text('Saved Locations'),
+          enabled: false,
+          title: Text('Saved Locations (coming soon)'),
         ),
-        const ListTile(
-          title: Text('to be developed...'),
+        const Divider(),
+        const SwitchListTile(
+          title: Text('Sync Calendar (coming soon)'),
+          value: false,
+          onChanged: null,
         ),
         const Divider(),
         TextButton(
