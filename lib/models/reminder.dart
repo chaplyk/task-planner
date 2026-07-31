@@ -12,6 +12,7 @@ class Reminder {
     this.transcript,
     this.triggerType = 'time',
     this.activity,
+    this.category,
   });
   final String summary;
   final DateTime? when;
@@ -19,12 +20,14 @@ class Reminder {
   final String? transcript;
   final String triggerType;
   final String? activity;
+  final String? category;
 
   // Parse a decoded JSON map
   factory Reminder.fromJson(Map<String, dynamic> json, {String? transcript}) {
     final dynamic summary = json['summary'];
     final dynamic when = json['when'];
     final dynamic condition = json['condition'];
+    final dynamic category = json['category'];
     final activity = activities.contains(json['activity']) ? json['activity'] as String : null;
     return Reminder(
       summary: summary is String ? summary : '',
@@ -35,6 +38,7 @@ class Reminder {
       transcript: transcript,
       triggerType: activity == null ? 'time' : 'activity',
       activity: activity,
+      category: category,
     );
   }
 
@@ -43,9 +47,9 @@ class Reminder {
     'when': when?.toIso8601String(),
     'condition': condition,
     'activity': activity,
+    'category': category,
   };
 
-  // Draft of Reminder object
   Map<String, dynamic> toMap() => {
     'summary': summary,
     'when': when == null ? null : Timestamp.fromDate(when!),
@@ -54,6 +58,7 @@ class Reminder {
     'status': 0,
     'triggerType': triggerType,
     'activity': activity,
+    'category': category,
     'createdAt': Timestamp.now(),
   };
 
@@ -90,19 +95,6 @@ class Reminder {
   @override
   String toString() =>
       'Reminder(summary: $summary, when: $when, condition: $condition, '
-      'transcript: $transcript, triggerType: $triggerType, activity: $activity)';
-
-  @override
-  bool operator ==(Object other) =>
-      other is Reminder &&
-      other.summary == summary &&
-      other.when == when &&
-      other.condition == condition &&
-      other.transcript == transcript &&
-      other.triggerType == triggerType &&
-      other.activity == activity;
-
-  @override
-  int get hashCode =>
-      Object.hash(summary, when, condition, transcript, triggerType, activity);
+      'transcript: $transcript, triggerType: $triggerType, activity: $activity, '
+      'category: $category)';
 }

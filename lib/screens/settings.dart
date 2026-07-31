@@ -74,6 +74,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           },
         ),
         const Divider(),
+        const ListTile(
+          title: Text('Saved Locations'),
+        ),
+        const ListTile(
+          title: Text('to be developed...'),
+        ),
+        const Divider(),
         TextButton(
           onPressed: _deleteAccount,
           child: const Text('Delete account', style: TextStyle(color: Colors.red)),
