@@ -40,7 +40,12 @@ class _RemindersScreenState extends State<RemindersScreen> {
                       ),
                       title: Text(doc.data()['summary']),
                       subtitle: Text(doc.data()['condition'] ?? ''),
-                      trailing: Chip(label: Text(doc.data()['category'] ?? '')),
+                      trailing: Chip(
+                        label: Text(
+                          doc.data()['category'] ?? '',
+                          style: const TextStyle(fontSize: 10),
+                        ),
+                      ),
                     );
                   },
                 )
