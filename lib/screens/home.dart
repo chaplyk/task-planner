@@ -10,7 +10,7 @@ import '../activity_watch.dart';
 import '../collections.dart';
 import '../models/reminder.dart';
 import '../notifications.dart';
-import '../reminder_extractor.dart';
+import '../gemma/extractor.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -94,11 +94,57 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final reminder = await _extractor.extract(event['text']);
       debugPrint('Reminder: $reminder');
+      if ((reminder!.confidence ?? 0) < 0.7) {
+        final confirmed = await _confirmReminder(reminder);
+        if (confirmed != true) {
+          setState(() => _thinking = false);
+          return;
+        }
+      }
       await _save(reminder);
     } catch (e) {
       debugPrint('Extraction failed: $e');
     }
     setState(() => _thinking = false);
+  }
+
+  Future<bool?> _confirmReminder(Reminder reminder) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Not quite sure about this...'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(text: 'Summary: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                  TextSpan(text: reminder.summary),
+                  TextSpan(text: '\n'),
+                  TextSpan(text: 'Condition: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                  TextSpan(text: reminder.condition ?? ''),
+                  TextSpan(text: '\n'),
+                  TextSpan(text: 'Category: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                  TextSpan(text: reminder.category),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
   }
 
   // Integer ID for Firestore - seconds since 2026
