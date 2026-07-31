@@ -24,15 +24,23 @@ jobs:
         with:
           channel: stable
 
+      - name: Download dependencies
+        run: flutter pub get
+
+      - name: Decode keystore
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/upload-keystore.jks
+
+      - name: Write key.properties
+        run: echo "${{ secrets.ANDROID_KEY_PROPERTIES }}" > android/key.properties
+
+      - name: Build AAB
+        run: flutter build appbundle --release
+
       - name: Publish to Google Play
-        uses: deep-rent/publish-android-release@v2.1.3
+        uses: r0adkll/upload-google-play@v1
         with:
-          project-directory: 'android'
-          package-name: 'com.chaplyk.memory'
-          keystore: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          keystore-password: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          key-alias: 'mykey'
-          key-password: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          service-account: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE64 }}
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: 'com.chaplyk.memory'
+          releaseFile: 'build/app/outputs/bundle/release/app-release.aab'
           track: 'internal'
           status: 'completed'
