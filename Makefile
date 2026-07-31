@@ -9,5 +9,8 @@ bump:
 build: bump
 	flutter build apk
 
+build-release: bump
+	flutter build appbundle --release
+
 run: bump
 	flutter run

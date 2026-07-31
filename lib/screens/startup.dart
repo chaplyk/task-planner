@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../model_download.dart';
-import 'root_screen.dart';
+import 'root.dart';
 
 class StartupScreen extends StatefulWidget {
   const StartupScreen({super.key});

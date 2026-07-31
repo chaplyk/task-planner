@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -21,10 +22,12 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   static const _methods = MethodChannel('speech/methods');
   static const _events = EventChannel('speech/events');
+  static const _timeout = Duration(seconds: 15);
 
   final _extractor = ReminderExtractor();
   bool _recording = false;
   bool _thinking = false;
+  Timer? _recordingTimer;
 
   @override
   void initState() {
@@ -63,6 +66,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _toggle() async {
     if (_recording) {
+      _recordingTimer?.cancel();
       await _methods.invokeMethod<void>('stop');
       setState(() => _recording = false);
       return;
@@ -76,6 +80,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     await _methods.invokeMethod<void>('start');
     setState(() => _recording = true);
+    _recordingTimer = Timer(_timeout, _toggle);
   }
 
   // Called by the bridge when it has recognized the speech
