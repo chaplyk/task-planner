@@ -42,7 +42,7 @@ class ReminderExtractor {
 
   String _prompt(String transcript) =>
       'Extract the task from the reminder into '
-      '{"summary": "...", "when": null, "condition": null, "activity": null, "category": null}.\n'
+      '{"summary": "...", "when": null, "condition": null, "activity": null, "category": null, "confidence": 0.0}.\n'
       'The summary is short and imperative, without any time or place.\n'
       'If time mentioned, fill the "when" accordingly.\n'
       'Today is ${DateTime.now().toIso8601String()}.\n'
@@ -54,6 +54,8 @@ class ReminderExtractor {
       'The "condition" is the time or activity as said in the reminder. '
       'For example "tomorrow afternoon" or "next time I drive".\n'
       'The "category" is the type of task.\n'
-      'The "category" is one of $categories or "other".\n\n'
+      'The "category" is one of $categories or "other".\n'
+      'The "confidence" is how useful this reminder is from 0.0 to 1.0.\n'
+      'The "confidence" is low when when it is vague or meaningless.\n\n'
       'Reminder: "$transcript"\n';
 }

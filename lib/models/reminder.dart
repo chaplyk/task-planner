@@ -13,6 +13,7 @@ class Reminder {
     this.triggerType = 'time',
     this.activity,
     this.category,
+    this.confidence,
   });
   final String summary;
   final DateTime? when;
@@ -21,6 +22,7 @@ class Reminder {
   final String triggerType;
   final String? activity;
   final String? category;
+  final double? confidence;
 
   // Parse a decoded JSON map
   factory Reminder.fromJson(Map<String, dynamic> json, {String? transcript}) {
@@ -28,6 +30,7 @@ class Reminder {
     final dynamic when = json['when'];
     final dynamic condition = json['condition'];
     final dynamic category = json['category'];
+    final dynamic confidence = json['confidence'];
     final activity = activities.contains(json['activity']) ? json['activity'] as String : null;
     return Reminder(
       summary: summary is String ? summary : '',
@@ -39,6 +42,7 @@ class Reminder {
       triggerType: activity == null ? 'time' : 'activity',
       activity: activity,
       category: category,
+      confidence: confidence,
     );
   }
 
@@ -48,6 +52,7 @@ class Reminder {
     'condition': condition,
     'activity': activity,
     'category': category,
+    'confidence': confidence,
   };
 
   Map<String, dynamic> toMap() => {
@@ -59,6 +64,7 @@ class Reminder {
     'triggerType': triggerType,
     'activity': activity,
     'category': category,
+    'confidence': confidence,
     'createdAt': Timestamp.now(),
   };
 
@@ -96,5 +102,5 @@ class Reminder {
   String toString() =>
       'Reminder(summary: $summary, when: $when, condition: $condition, '
       'transcript: $transcript, triggerType: $triggerType, activity: $activity, '
-      'category: $category)';
+      'category: $category, confidence: $confidence)';
 }
