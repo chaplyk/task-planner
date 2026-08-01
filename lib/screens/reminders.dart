@@ -22,6 +22,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(title: const Text('Reminder List')),
       body: StreamBuilder(
         stream: reminders().where('status', isEqualTo: 0).snapshots(),
         builder: (context, snapshot) {
@@ -39,9 +40,11 @@ class _RemindersScreenState extends State<RemindersScreen> {
                         onChanged: (value) => _setChecked(doc.id, doc.reference, value ?? false),
                       ),
                       title: Text(doc.data()['summary']),
-                      subtitle: doc.data()['activity'] != null
-                          ? Text((doc.data()['condition'] ?? '') + ' 🔔')
-                          : Text(doc.data()['condition'] ?? ''),
+                      subtitle: Text(
+                        (doc.data()['condition'] ?? '') +
+                            (doc.data()['activity'] != null ? ' 🔔' : '') +
+                            (doc.data()['notified'] == true ? ' ✨' : ''),
+                      ),
                       trailing: Chip(
                         label: Text(
                           doc.data()['category'] ?? '',

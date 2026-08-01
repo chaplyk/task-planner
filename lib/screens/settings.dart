@@ -43,7 +43,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
+    return Scaffold(
+      appBar: AppBar(title: const Text('Settings')),
+      body: ListView(
       children: [
         const Divider(),
         const ListTile(
@@ -94,6 +96,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: const Text('Delete account', style: TextStyle(color: Colors.red)),
         ),
       ],
-    );
+    ),
+  );
   }
 }

@@ -50,11 +50,12 @@ Future<void> _checkReminders(String activity) async {
       .collection('reminders')
       .where('status', isEqualTo: 0)
       .where('activity', isEqualTo: activity)
+      .where('notified', isEqualTo: false)
       .get();
 
   for (final doc in snapshot.docs) {
     await showNotification(int.parse(doc.id), doc.data()['summary'] ?? 'Reminder');
-    // !!! mark notification as sent here !!!
+    await doc.reference.update({'notified': true});
   }
 }
 
