@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:animated_text_kit/animated_text_kit.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -166,13 +167,47 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       body: Center(
-        child: _thinking
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+          _thinking
             ? const CircularProgressIndicator()
             : IconButton(
                 onPressed: _toggle,
                 iconSize: 96,
                 icon: Icon(_recording ? Icons.stop : Icons.mic),
+            ),
+            SizedBox(height: 32),
+            SizedBox(
+              height: 80,
+              child: DefaultTextStyle(
+                style: TextStyle(
+                  fontSize: 18.0,
+                  fontFamily: 'Agne',
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                child: AnimatedTextKit(
+                  repeatForever: true,
+                  pause: const Duration(milliseconds: 1000),
+                  animatedTexts: [
+                    TypewriterAnimatedText(
+                      'Remind me to buy dog food next time I am driving',
+                      speed: const Duration(milliseconds: 150),
+                    ),
+                    TypewriterAnimatedText(
+                      'Remind me to call mom tomorrow morning',
+                      speed: const Duration(milliseconds: 150),
+                    ),
+                    TypewriterAnimatedText(
+                      'Remind me to pay bills when I get home',
+                      speed: const Duration(milliseconds: 150),
+                    ),
+                  ],
+                ),
               ),
+            ),
+          ],
+        ),
       ),
     );
   }
