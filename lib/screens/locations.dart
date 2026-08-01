@@ -1,3 +1,4 @@
+// ignore_for_file: use_build_context_synchronously
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -11,7 +12,6 @@ class LocationsScreen extends StatelessWidget {
     final position = await Geolocator.getCurrentPosition();
 
     final controller = TextEditingController();
-    // ignore: use_build_context_synchronously
     final name = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -49,7 +49,7 @@ class LocationsScreen extends StatelessWidget {
           return ListView(
             children: [
               const SwitchListTile(
-                title: Text('Enable reminders (coming soon)'),
+                title: Text('Enable Reminders (coming soon)'),
                 value: false,
                 onChanged: null,
               ),
