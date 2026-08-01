@@ -16,6 +16,7 @@ class ReminderExtractor {
     if (transcript.trim().isEmpty) return null;
 
     _model ??= await FlutterGemma.getActiveModel(maxTokens: 1024);
+    debugPrint('Inference backend: ${_model!.activeBackend}');
 
     final categoryDocs = await categoriesCollection().get();
     categories = categoryDocs.docs.map((doc) => doc['name'] as String).join(', ');

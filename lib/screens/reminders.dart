@@ -40,7 +40,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
                       ),
                       title: Text(doc.data()['summary']),
                       subtitle: doc.data()['activity'] != null
-                          ? Text(doc.data()['condition'] + ' 🔔')
+                          ? Text((doc.data()['condition'] ?? '') + ' 🔔')
                           : Text(doc.data()['condition'] ?? ''),
                       trailing: Chip(
                         label: Text(

@@ -14,3 +14,6 @@ CollectionReference<Map<String, dynamic>> categoriesCollection() {
   return userDoc().collection('categories');
 }
 
+CollectionReference<Map<String, dynamic>> locationsCollection() {
+  return userDoc().collection('locations');
+}
