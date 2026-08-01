@@ -39,7 +39,9 @@ class _RemindersScreenState extends State<RemindersScreen> {
                         onChanged: (value) => _setChecked(doc.id, doc.reference, value ?? false),
                       ),
                       title: Text(doc.data()['summary']),
-                      subtitle: Text(doc.data()['condition'] ?? ''),
+                      subtitle: doc.data()['activity'] != null
+                          ? Text((doc.data()['condition'] ?? '') + ' 🔔')
+                          : Text(doc.data()['condition'] ?? ''),
                       trailing: Chip(
                         label: Text(
                           doc.data()['category'] ?? '',

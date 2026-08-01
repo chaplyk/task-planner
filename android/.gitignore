@@ -1,3 +1,6 @@
+app/google-services.json
+/build
+
 /.gradle
 /captures/
 /local.properties

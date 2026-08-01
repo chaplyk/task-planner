@@ -4,6 +4,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:material_tag_editor/tag_editor.dart';
 
 import '../collections.dart';
+import 'locations.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -74,9 +75,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           },
         ),
         const Divider(),
-        const ListTile(
-          enabled: false,
-          title: Text('Saved Locations (coming soon)'),
+        ListTile(
+          title: const Text('Saved Locations'),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const LocationsScreen()),
+          ),
         ),
         const Divider(),
         const SwitchListTile(
