@@ -11,6 +11,7 @@ class LocationsScreen extends StatelessWidget {
     final position = await Geolocator.getCurrentPosition();
 
     final controller = TextEditingController();
+    // ignore: use_build_context_synchronously
     final name = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -44,7 +45,7 @@ class LocationsScreen extends StatelessWidget {
       body: StreamBuilder(
         stream: locationsCollection().snapshots(),
         builder: (context, snapshot) {
-          final docs = snapshot.data!.docs;
+          final docs = snapshot.data?.docs ?? [];
           return ListView(
             children: [
               const SwitchListTile(
