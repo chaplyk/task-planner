@@ -14,8 +14,8 @@ class LocationsScreen extends StatelessWidget {
     final name = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Name:'),
-        content: TextField(controller: controller),
+        title: const Text('Add Current Location'),
+        content: TextField(controller: controller, decoration: const InputDecoration(hintText: 'Location Name')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, controller.text),
@@ -57,6 +57,10 @@ class LocationsScreen extends StatelessWidget {
                   (doc) => ListTile(
                     title: Text(doc.data()['name']),
                     subtitle: Text('${doc.data()['latitude']}, ${doc.data()['longitude']}'),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete),
+                      onPressed: () => doc.reference.delete(),
+                    ),
                   ),
                 ),
             ],
