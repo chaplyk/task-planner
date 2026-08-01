@@ -2,8 +2,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:material_tag_editor/tag_editor.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../collections.dart';
+import '../gemma/extractor.dart';
 import 'locations.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -43,7 +45,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
+    return Scaffold(
+      appBar: AppBar(title: const Text('Settings')),
+      body: ListView(
       children: [
         const Divider(),
         const ListTile(
@@ -89,11 +93,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
           onChanged: null,
         ),
         const Divider(),
+        SizedBox(height: 16),
         TextButton(
           onPressed: _deleteAccount,
           child: const Text('Delete account', style: TextStyle(color: Colors.red)),
         ),
+        SizedBox(height: 24),
+        ValueListenableBuilder<String>(
+          valueListenable: activeBackendNotifier,
+          builder: (context, backend, _) => Text(
+            'Inference: $backend',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+        ),
+        FutureBuilder<PackageInfo>(
+          future: PackageInfo.fromPlatform(),
+          builder: (context, snapshot) => Text(
+            'Version ${snapshot.data!.version}+${snapshot.data!.buildNumber}',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+        ),
       ],
-    );
+    ),
+  );
   }
 }

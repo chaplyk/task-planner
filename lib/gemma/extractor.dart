@@ -7,6 +7,8 @@ import '../collections.dart';
 const _systemInstruction =
     'You convert reminders into JSON. Reply with JSON only, no explanations.';
 
+final activeBackendNotifier = ValueNotifier<String>('not loaded');
+
 // Converts text into a JSON using LLM
 class ReminderExtractor {
   InferenceModel? _model;
@@ -16,7 +18,6 @@ class ReminderExtractor {
     if (transcript.trim().isEmpty) return null;
 
     _model ??= await FlutterGemma.getActiveModel(maxTokens: 1024);
-    debugPrint('Inference backend: ${_model!.activeBackend}');
 
     final categoryDocs = await categoriesCollection().get();
     categories = categoryDocs.docs.map((doc) => doc['name'] as String).join(', ');
@@ -26,6 +27,10 @@ class ReminderExtractor {
       systemInstruction: _systemInstruction,
       maxOutputTokens: 256,
     );
+    
+    activeBackendNotifier.value = _model!.activeBackend!.name;
+    debugPrint('Inference backend: ${activeBackendNotifier.value}');
+    
     try {
       await session.addQueryChunk(Message(text: _prompt(transcript), isUser: true));
       final raw = await session.getResponse();

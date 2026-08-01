@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:animated_text_kit/animated_text_kit.dart';
+import 'package:siri_wave/siri_wave.dart';
 
 import '../activity_watch.dart';
 import '../collections.dart';
@@ -166,13 +168,68 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       body: Center(
-        child: _thinking
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+          _thinking
             ? const CircularProgressIndicator()
             : IconButton(
                 onPressed: _toggle,
                 iconSize: 96,
                 icon: Icon(_recording ? Icons.stop : Icons.mic),
+            ),
+            SizedBox(height: 32),
+            DefaultTextStyle(
+              style: TextStyle(
+                fontSize: 18.0,
+                fontFamily: 'Agne',
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.primary,
               ),
+              child: const Text('Just say: Remind me to...'),
+            ),
+            SizedBox(
+              height: 80,
+              child: DefaultTextStyle(
+                style: TextStyle(
+                  fontSize: 18.0,
+                  fontFamily: 'Agne',
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                child: AnimatedTextKit(
+                  repeatForever: true,
+                  pause: const Duration(milliseconds: 1000),
+                  animatedTexts: [
+                    TypewriterAnimatedText(
+                      'buy dog food next time I am driving',
+                      speed: const Duration(milliseconds: 150),
+                    ),
+                    TypewriterAnimatedText(
+                      'call mom tomorrow morning',
+                      speed: const Duration(milliseconds: 150),
+                    ),
+                    TypewriterAnimatedText(
+                      'pay bills when I get home',
+                      speed: const Duration(milliseconds: 150),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(height: 40),
+            if (_recording) ...[
+              SiriWaveform.ios7(
+                controller: IOS7SiriWaveformController(
+                  amplitude: 0.5,
+                  color: Theme.of(context).colorScheme.primary,
+                  frequency: 3,
+                  speed: 0.09,
+                ),
+                options: const IOS7SiriWaveformOptions(height: 140, width: 400),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
