@@ -12,6 +12,8 @@ class Reminder {
     this.transcript,
     this.triggerType = 'time',
     this.activity,
+    this.location,
+    this.locationEvent,
     this.category,
     this.confidence,
     this.notified = false,
@@ -22,27 +24,45 @@ class Reminder {
   final String? transcript;
   final String triggerType;
   final String? activity;
+  final String? location;
+  final String? locationEvent;
   final String? category;
   final double? confidence;
   final bool notified;
 
   // Parse a decoded JSON map
   factory Reminder.fromJson(Map<String, dynamic> json, {String? transcript}) {
-    final dynamic summary = json['summary'];
-    final dynamic when = json['when'];
-    final dynamic condition = json['condition'];
-    final dynamic category = json['category'];
-    final dynamic confidence = json['confidence'];
-    final activity = activities.contains(json['activity']) ? json['activity'] as String : null;
+    final summary = json['summary'];
+    final when = json['when'] is String ? DateTime.tryParse(json['when']) : null;
+    final condition = json['condition'];
+    final category = json['category'];
+    final confidence = json['confidence'];
+    final activity = activities.contains(json['activity']) ? json['activity'] : null;
+    final location = json['location'];
+    final locationEvent = ['enter', 'exit'].contains(json['locationEvent']) ? json['locationEvent']: null;
+
+    String triggerType;
+    if (activity != null) {
+      triggerType = 'activity';
+    } else if (when != null) {
+      triggerType = 'time';
+    } else if (location != null && locationEvent != null) {
+      triggerType = 'location';
+    } else {
+      triggerType = 'none';
+    }
+
     return Reminder(
       summary: summary is String ? summary : '',
-      when: when is String ? DateTime.tryParse(when) : null,
+      when: when,
       condition: condition is String && condition.isNotEmpty
           ? condition
           : null,
       transcript: transcript,
-      triggerType: activity == null ? 'time' : 'activity',
+      triggerType: triggerType,
       activity: activity,
+      location: location,
+      locationEvent: locationEvent,
       category: category,
       confidence: confidence,
     );
@@ -53,6 +73,8 @@ class Reminder {
     'when': when?.toIso8601String(),
     'condition': condition,
     'activity': activity,
+    'location': location,
+    'locationEvent': locationEvent,
     'category': category,
     'confidence': confidence,
     'notified': notified,
@@ -66,6 +88,8 @@ class Reminder {
     'status': 0,
     'triggerType': triggerType,
     'activity': activity,
+    'location': location,
+    'locationEvent': locationEvent,
     'category': category,
     'confidence': confidence,
     'notified': notified,
@@ -106,5 +130,6 @@ class Reminder {
   String toString() =>
       'Reminder(summary: $summary, when: $when, condition: $condition, '
       'transcript: $transcript, triggerType: $triggerType, activity: $activity, '
+      'location: $location, locationEvent: $locationEvent, '
       'category: $category, confidence: $confidence, notified: $notified)';
 }

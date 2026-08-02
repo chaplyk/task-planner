@@ -1,5 +1,7 @@
 // ignore_for_file: use_build_context_synchronously
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:native_geofence/native_geofence.dart';
@@ -51,7 +53,6 @@ class LocationsScreen extends StatelessWidget {
         triggers: {
           GeofenceEvent.enter,
           GeofenceEvent.exit,
-          GeofenceEvent.dwell,
         },
         iosSettings: IosGeofenceSettings(),
         androidSettings: AndroidGeofenceSettings(
