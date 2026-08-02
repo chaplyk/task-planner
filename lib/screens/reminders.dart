@@ -42,6 +42,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
                       title: Text(doc.data()['summary']),
                       subtitle: Text(
                         (doc.data()['condition'] ?? '') +
+                            (doc.data()['when'] != null ? ' 🕐' : '') +
                             (doc.data()['activity'] != null ? ' 🔔' : '') +
                             (doc.data()['notified'] == true ? ' ✨' : ''),
                       ),

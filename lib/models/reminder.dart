@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-const activities = ['IN_VEHICLE', 'ON_BICYCLE', 'RUNNING', 'WALKING', 'STILL'];
+const activities = ['IN_VEHICLE', 'ON_BICYCLE', 'RUNNING', 'WALKING'];
 
 class Reminder {
   const Reminder({
