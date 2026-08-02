@@ -6,7 +6,7 @@ DocumentReference<Map<String, dynamic>> userDoc() {
   return FirebaseFirestore.instance.collection('users').doc(uid);
 }
 
-CollectionReference<Map<String, dynamic>> reminders() {
+CollectionReference<Map<String, dynamic>> remindersCollection() {
   return userDoc().collection('reminders');
 }
 

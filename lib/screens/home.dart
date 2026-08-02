@@ -45,7 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _rescheduleAllNotifications() async {
-    final snapshot = await reminders().where('status', isEqualTo: 0).get();
+    final snapshot = await remindersCollection().where('status', isEqualTo: 0).get();
     for (final doc in snapshot.docs) {
       final when = doc.data()['when'] as Timestamp?;
       if (when == null) continue;
@@ -152,7 +152,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // Integer ID for Firestore - seconds since 2026
   Future<void> _save(Reminder? reminder) async {
     final id = DateTime.now().difference(DateTime.utc(2026)).inSeconds;
-    await reminders().doc('$id').set(reminder?.toMap() ?? {});
+    await remindersCollection().doc('$id').set(reminder?.toMap() ?? {});
     if (reminder?.when != null && reminder!.triggerType == 'time') {
       await scheduleNotification(id, reminder.summary, reminder.when!);
     }

@@ -24,7 +24,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Reminder List')),
       body: StreamBuilder(
-        stream: reminders().where('status', isEqualTo: 0).snapshots(),
+        stream: remindersCollection().where('status', isEqualTo: 0).snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
