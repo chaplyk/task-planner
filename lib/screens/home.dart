@@ -164,7 +164,8 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('NagadAI'),
         actions: [
-          IconButton(onPressed: _signOut, icon: const Icon(Icons.logout)),
+          if (FirebaseAuth.instance.currentUser?.isAnonymous == false)
+            IconButton(onPressed: _signOut, icon: const Icon(Icons.logout)),
         ],
       ),
       body: Center(

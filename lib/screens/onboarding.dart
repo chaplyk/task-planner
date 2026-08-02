@@ -2,6 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import '../collections.dart';
+
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -18,8 +20,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       await FirebaseAuth.instance.signInWithCredential(
         GoogleAuthProvider.credential(idToken: account.authentication.idToken),
       );
+      await categoriesCollection().add({'name': 'personal'}); // add safeguard later
     } catch (e) {
       debugPrint('Sign in failed: $e');
+    }
+  }
+
+  Future<void> _continueAsGuest() async {
+    try {
+      await FirebaseAuth.instance.signInAnonymously();
+      await categoriesCollection().add({'name': 'personal'}); // add safeguard later
+    } catch (e) {
+      debugPrint('Anonymous sign in failed: $e');
     }
   }
 
@@ -53,10 +65,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           Padding(
             padding: const EdgeInsets.all(24),
             child: _page == 2
-                ? OutlinedButton.icon(
-                    onPressed: _signIn,
-                    icon: const Icon(Icons.login),
-                    label: const Text('Sign in with Google'),
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      GestureDetector(
+                        onTap: _signIn,
+                        child: Image.asset(
+                          'assets/images/google_signin_button.png',
+                          height: 48,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _continueAsGuest,
+                        child: const Text('Continue as guest'),
+                      ),
+                    ],
                   )
                 : const Text('Swipe to continue'),
           ),

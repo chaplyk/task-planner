@@ -53,6 +53,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const ListTile(
           title: Text('Categories'),
         ),
+        Padding(padding: const EdgeInsets.all(5), child:
         StreamBuilder(
           stream: categoriesCollection().snapshots(),
           builder: (context, snapshot) {
@@ -77,6 +78,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             );
           },
+        ),
         ),
         const Divider(),
         ListTile(
