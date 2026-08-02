@@ -24,7 +24,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Reminder List')),
       body: StreamBuilder(
-        stream: reminders().where('status', isEqualTo: 0).snapshots(),
+        stream: remindersCollection().where('status', isEqualTo: 0).snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
@@ -42,9 +42,10 @@ class _RemindersScreenState extends State<RemindersScreen> {
                       title: Text(doc.data()['summary']),
                       subtitle: Text(
                         (doc.data()['condition'] ?? '') +
-                            (doc.data()['when'] != null ? ' 🕐' : '') +
-                            (doc.data()['activity'] != null ? ' 🔔' : '') +
-                            (doc.data()['notified'] == true ? ' ✨' : ''),
+                            (doc.data()['triggerType'] == 'time' ? ' 🕐' : '') +
+                            (doc.data()['triggerType'] == 'activity' ? ' ✨' : '') +
+                            (doc.data()['triggerType'] == 'location' ? ' 🗺️' : '') +
+                            (doc.data()['notified'] == true ? ' 🔔' : ''),
                       ),
                       trailing: Chip(
                         label: Text(

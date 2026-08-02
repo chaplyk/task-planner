@@ -1,15 +1,44 @@
 // ignore_for_file: use_build_context_synchronously
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:native_geofence/native_geofence.dart';
 
 import '../collections.dart';
+import '../notifications.dart';
 import '../permissions.dart';
 
 @pragma('vm:entry-point')
 Future<void> geofenceTriggered(GeofenceCallbackParams params) async {
   debugPrint('Geofence triggered with params: $params');
+
+  await Firebase.initializeApp();
+  for (final geofence in params.geofences) {
+    final locationDoc = await locationsCollection().doc(geofence.id).get();
+    final locationName = locationDoc.data()?['name'];
+
+    String event;
+    if (params.event == GeofenceEvent.enter) {
+      event = "enter";
+    } else if (params.event == GeofenceEvent.exit) {
+      event = "exit";
+    } else {
+      return;
+    }
+
+    final snapshot = await remindersCollection()
+        .where('status', isEqualTo: 0)
+        .where('location', isEqualTo: locationName)
+        .where('locationEvent', isEqualTo: event)
+        .where('notified', isEqualTo: false)
+        .get();
+
+    for (final doc in snapshot.docs) {
+      await showNotification(int.parse(doc.id), doc.data()['summary'] ?? 'Reminder');
+      await doc.reference.update({'notified': true});
+    }
+  }
 }
 
 class LocationsScreen extends StatelessWidget {
@@ -51,7 +80,6 @@ class LocationsScreen extends StatelessWidget {
         triggers: {
           GeofenceEvent.enter,
           GeofenceEvent.exit,
-          GeofenceEvent.dwell,
         },
         iosSettings: IosGeofenceSettings(),
         androidSettings: AndroidGeofenceSettings(
