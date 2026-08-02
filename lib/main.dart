@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:flutter_gemma_litertlm/flutter_gemma_litertlm.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:native_geofence/native_geofence.dart';
 
 import 'notifications.dart';
 import 'screens/onboarding.dart';
@@ -18,6 +19,7 @@ Future<void> main() async {
   await FlutterGemma.initialize(inferenceEngines: [LiteRtLmEngine()]);
   await initNotifications();
   await askNotificationPermission();
+  await NativeGeofenceManager.instance.initialize();
   runApp(const MyApp());
 }
 

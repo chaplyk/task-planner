@@ -1,14 +1,22 @@
 // ignore_for_file: use_build_context_synchronously
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:native_geofence/native_geofence.dart';
 
 import '../collections.dart';
+import '../permissions.dart';
+
+@pragma('vm:entry-point')
+Future<void> geofenceTriggered(GeofenceCallbackParams params) async {
+  debugPrint('Geofence triggered with params: $params');
+}
 
 class LocationsScreen extends StatelessWidget {
   const LocationsScreen({super.key});
 
   Future<void> _addCurrentLocation(BuildContext context) async {
-    await Geolocator.requestPermission();
+    await requestBackgroundLocationPermission(context);
     final position = await Geolocator.getCurrentPosition();
 
     final controller = TextEditingController();
@@ -27,12 +35,36 @@ class LocationsScreen extends StatelessWidget {
     );
 
     if (name != null) {
-      await locationsCollection().add({
+      final doc = await locationsCollection().add({
         'name': name,
         'latitude': position.latitude,
         'longitude': position.longitude,
       });
+
+      final zone = Geofence(
+        id: doc.id,
+        location: Location(
+          latitude: position.latitude,
+          longitude: position.longitude,
+        ),
+        radiusMeters: 75, // minimum recommended minimum 100-150, will adjust later
+        triggers: {
+          GeofenceEvent.enter,
+          GeofenceEvent.exit,
+          GeofenceEvent.dwell,
+        },
+        iosSettings: IosGeofenceSettings(),
+        androidSettings: AndroidGeofenceSettings(
+          initialTriggers: {},
+        ),
+      );
+      await NativeGeofenceManager.instance.createGeofence(zone, geofenceTriggered);
     }
+  }
+
+  Future<void> _deleteLocation(DocumentReference doc) async {
+    await NativeGeofenceManager.instance.removeGeofenceById(doc.id);
+    await doc.delete();
   }
 
   @override
@@ -60,7 +92,7 @@ class LocationsScreen extends StatelessWidget {
                     subtitle: Text('${doc.data()['latitude']}, ${doc.data()['longitude']}'),
                     trailing: IconButton(
                       icon: const Icon(Icons.delete),
-                      onPressed: () => doc.reference.delete(),
+                      onPressed: () => _deleteLocation(doc.reference),
                     ),
                   ),
                 ),
