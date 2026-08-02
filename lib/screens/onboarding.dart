@@ -43,16 +43,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           Expanded(
             child: PageView(
               onPageChanged: (i) => setState(() => _page = i),
-              children: const [
+              children: [
                 _Page(
                   icon: Icons.mic,
-                  title: 'Tap to speak',
-                  text: 'Record your thoughts and ideas.',
+                  title: 'Record your thoughts',
+                  text: 'NagadAI remembers so you don\'t have to',
                 ),
                 _Page(
                   icon: Icons.auto_awesome,
                   title: 'Use AI',
                   text: 'AI Model will process your prompt.',
+                ),
+                _Page(
+                  icon: Icons.schedule,
+                  title: 'Smart triggers',
+                  text: 'Time, location, activity.. you name it.',
                 ),
                 _Page(
                   icon: Icons.notifications_active,
@@ -64,7 +69,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           Padding(
             padding: const EdgeInsets.all(24),
-            child: _page == 2
+            child: _page == 3
                 ? Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [

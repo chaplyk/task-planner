@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../gemma/download.dart';
+import '../permissions.dart';
 import 'root.dart';
 
 class StartupScreen extends StatefulWidget {
@@ -18,6 +19,7 @@ class _StartupScreenState extends State<StartupScreen> {
   void initState() {
     super.initState();
     _download();
+    requestBackgroundLocationPermission(context);
   }
 
   Future<void> _download() async {

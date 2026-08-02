@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:native_geofence/native_geofence.dart';
 
 import '../collections.dart';
+import '../permissions.dart';
 
 @pragma('vm:entry-point')
 Future<void> geofenceTriggered(GeofenceCallbackParams params) async {
@@ -15,7 +16,7 @@ class LocationsScreen extends StatelessWidget {
   const LocationsScreen({super.key});
 
   Future<void> _addCurrentLocation(BuildContext context) async {
-    await Geolocator.requestPermission();
+    await requestBackgroundLocationPermission(context);
     final position = await Geolocator.getCurrentPosition();
 
     final controller = TextEditingController();
