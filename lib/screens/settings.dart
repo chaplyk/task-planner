@@ -67,6 +67,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 hintText: 'Add Category...',
               ),
               onTagChanged: (newValue) {
+                if (docs.length >= 5) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('You can only have up to 5 categories')),
+                  );
+                  return;
+                }
+
+                bool categoryExists = false;
+                for (var doc in docs) {
+                  if (doc['name'] == newValue) {
+                    categoryExists = true;
+                    break;
+                  }
+                }
+                if (newValue == "other" || categoryExists) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('This category already exists')),
+                  );
+                  return;
+                }
+
                 categoriesCollection().add({'name': newValue});
               },
               tagBuilder: (context, index) => Chip(
@@ -93,6 +114,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           title: Text('Sync Calendar (coming soon)'),
           value: false,
           onChanged: null,
+        ),
+        const Divider(),
+        const ListTile(
+          title: Text('Poll period'),
+          trailing: Text('2 min'),
+          enabled: false,
         ),
         const Divider(),
         SizedBox(height: 16),
