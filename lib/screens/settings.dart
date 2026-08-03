@@ -67,6 +67,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 hintText: 'Add Category...',
               ),
               onTagChanged: (newValue) {
+                if (docs.length >= 5) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('You can only have up to 5 categories')),
+                  );
+                  return;
+                }
                 categoriesCollection().add({'name': newValue});
               },
               tagBuilder: (context, index) => Chip(

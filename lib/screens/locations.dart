@@ -45,6 +45,15 @@ class LocationsScreen extends StatelessWidget {
   const LocationsScreen({super.key});
 
   Future<void> _addCurrentLocation(BuildContext context) async {
+    final existingLocations = await locationsCollection().count().get();
+    final existingLocationsCount = existingLocations.count ?? 0;
+    if (existingLocationsCount >= 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You can only have up to 10 locations')),
+      );
+      return;
+    }
+
     await requestBackgroundLocationPermission(context);
     final position = await Geolocator.getCurrentPosition();
 
@@ -108,12 +117,6 @@ class LocationsScreen extends StatelessWidget {
           final docs = snapshot.data?.docs ?? [];
           return ListView(
             children: [
-              const SwitchListTile(
-                title: Text('Enable Reminders (coming soon)'),
-                value: false,
-                onChanged: null,
-              ),
-              const Divider(),
               ...docs.map(
                   (doc) => ListTile(
                     title: Text(doc.data()['name']),
