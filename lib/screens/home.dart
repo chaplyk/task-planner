@@ -7,6 +7,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:siri_wave/siri_wave.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:firebase_performance/firebase_performance.dart';
 
 import '../activity_watch.dart';
 import '../collections.dart';
@@ -98,6 +99,10 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     setState(() => _thinking = true);
+
+    Trace thinkingTrace = FirebasePerformance.instance.newTrace('thinking');
+    await thinkingTrace.start();
+
     try {
       final reminder = await _extractor.extract(event['text']);
       debugPrint('Reminder: $reminder');
@@ -105,6 +110,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final confirmed = await _confirmReminder(reminder);
         if (confirmed != true) {
           setState(() => _thinking = false);
+          await thinkingTrace.stop();
           return;
         }
       }
@@ -113,6 +119,8 @@ class _HomeScreenState extends State<HomeScreen> {
       debugPrint('Extraction failed: $e');
     }
     setState(() => _thinking = false);
+
+    await thinkingTrace.stop();
   }
 
   Future<bool?> _confirmReminder(Reminder reminder) {
