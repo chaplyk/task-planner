@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:native_geofence/native_geofence.dart';
+import 'package:network_info_plus/network_info_plus.dart';
 
 import '../collections.dart';
 import '../notifications.dart';
@@ -50,18 +51,22 @@ class LocationsScreen extends StatefulWidget {
 
 class _LocationsScreenState extends State<LocationsScreen> {
   Position? _position;
+  String? _wifiName;
 
   @override
   void initState() {
     super.initState();
     _fetchPosition();
+    _fetchWifiName();
+  }
+
+  Future<void> _fetchWifiName() async {
+    _wifiName = await NetworkInfo().getWifiName();
   }
 
   Future<void> _fetchPosition() async {
     await requestBackgroundLocationPermission(context);
-
-    final position = await Geolocator.getCurrentPosition();
-    setState(() => _position = position);
+    _position = await Geolocator.getCurrentPosition();
   }
 
   Future<void> _addLocation(BuildContext context) async {
@@ -99,46 +104,68 @@ class _LocationsScreenState extends State<LocationsScreen> {
     await showDialog<String>(
       context: context,
       builder: (context) => SimpleDialog(
-        title: const Text('Add Location'),
+        title: const Text('Choose Location Type'),
         children: [
           SimpleDialogOption(
-            onPressed: () => Navigator.pop(context, 'gps'),
-            child: const ListTile(
+            onPressed: () => _addCurrentGpsLocation(context, name),
+            child: ListTile(
               leading: Icon(Icons.location_on),
-              title: Text('Current GPS location'),
+              title: Text('GPS Position'),
+              subtitle: Text('${_position!.latitude}, ${_position!.longitude}'),
             ),
           ),
-          const SimpleDialogOption(
-            onPressed: null,
+          SimpleDialogOption(
+            onPressed: () => _addCurrentWifiLocation(context, name),
             child: ListTile(
-              leading: Icon(Icons.wifi),
-              title: Text('WiFi network'),
-              subtitle: Text('Coming soon'),
+              leading: const Icon(Icons.wifi),
+              title: const Text('WiFi Network'),
+              subtitle: Text(_wifiName ?? 'Not connected'),
             ),
           ),
         ],
       ),
     );
+  }
 
-    await _addCurrentGpsLocation(context, name);
+  Future<void> _addCurrentWifiLocation(BuildContext context, String? name) async {
+    if (_wifiName == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to get current WiFi network')),
+      );
+      return;
+    }
+    Navigator.pop(context);
+    if (name != null) {
+      await locationsCollection().add({
+        'name': name,
+        'wifi': _wifiName,
+      });
+    }
   }
 
   Future<void> _addCurrentGpsLocation(BuildContext context, String? name) async {
-    var position = _position;
-    position ??= await Geolocator.getCurrentPosition();
-
+    if (_position == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to get current GPS position')),
+      );
+      return;
+    }
+    Navigator.pop(context);
     if (name != null) {
+      final double latitude = _position!.latitude;
+      final double longitude = _position!.longitude;
+
       final doc = await locationsCollection().add({
         'name': name,
-        'latitude': position.latitude,
-        'longitude': position.longitude,
+        'latitude': latitude,
+        'longitude': longitude,
       });
 
       final zone = Geofence(
         id: doc.id,
         location: Location(
-          latitude: position.latitude,
-          longitude: position.longitude,
+          latitude: latitude,
+          longitude: longitude,
         ),
         radiusMeters: 75, // minimum recommended minimum 100-150, will adjust later
         triggers: {
@@ -155,7 +182,7 @@ class _LocationsScreenState extends State<LocationsScreen> {
   }
 
   Future<void> _deleteLocation(DocumentReference doc) async {
-    await NativeGeofenceManager.instance.removeGeofenceById(doc.id);
+    await NativeGeofenceManager.instance.removeGeofenceById(doc.id); // TO ADD: do not remove for wifi location
     await doc.delete();
   }
 
@@ -175,7 +202,9 @@ class _LocationsScreenState extends State<LocationsScreen> {
               ...docs.map(
                   (doc) => ListTile(
                     title: Text(doc.data()['name']),
-                    subtitle: Text('${doc.data()['latitude']}, ${doc.data()['longitude']}'),
+                    subtitle: Text(
+                      doc.data()['wifi'] ?? '${doc.data()['latitude']}, ${doc.data()['longitude']}',
+                    ),
                     trailing: IconButton(
                       icon: const Icon(Icons.delete),
                       onPressed: () => _deleteLocation(doc.reference),
