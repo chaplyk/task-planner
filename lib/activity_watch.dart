@@ -41,10 +41,10 @@ class _ActivityTaskHandler extends TaskHandler {
     _checkActivityReminders(_activity.name);
 
     final wifiName = await NetworkInfo().getWifiName();
-    if (wifiName == null || wifiName == _lastWifiName) return;
+    if (wifiName == _lastWifiName) return;
     if (_lastWifiName != null) _checkWifiReminders(_lastWifiName, 'exit');
     _lastWifiName = wifiName;
-    _checkWifiReminders(wifiName, 'enter');
+    if (wifiName != null) _checkWifiReminders(wifiName, 'enter');
   }
 
   @override
