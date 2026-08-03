@@ -73,6 +73,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   );
                   return;
                 }
+
+                bool categoryExists = false;
+                for (var doc in docs) {
+                  if (doc['name'] == newValue) {
+                    categoryExists = true;
+                    break;
+                  }
+                }
+                if (newValue == "other" || categoryExists) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('This category already exists')),
+                  );
+                  return;
+                }
+
                 categoriesCollection().add({'name': newValue});
               },
               tagBuilder: (context, index) => Chip(
