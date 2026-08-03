@@ -10,7 +10,7 @@ on:
     branches: [ "main", "dev" ]
     paths:                                                                                                                                                       
       - 'lib/**'                                                                                                                                                 
-      - 'pubspec.*
+      - 'pubspec.*'
 
 jobs:
   build:
