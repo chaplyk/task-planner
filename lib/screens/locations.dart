@@ -41,10 +41,30 @@ Future<void> geofenceTriggered(GeofenceCallbackParams params) async {
   }
 }
 
-class LocationsScreen extends StatelessWidget {
+class LocationsScreen extends StatefulWidget {
   const LocationsScreen({super.key});
 
-  Future<void> _addCurrentLocation(BuildContext context) async {
+  @override
+  State<LocationsScreen> createState() => _LocationsScreenState();
+}
+
+class _LocationsScreenState extends State<LocationsScreen> {
+  Position? _position;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchPosition();
+  }
+
+  Future<void> _fetchPosition() async {
+    await requestBackgroundLocationPermission(context);
+
+    final position = await Geolocator.getCurrentPosition();
+    setState(() => _position = position);
+  }
+
+  Future<void> _addLocation(BuildContext context) async {
     final existingLocations = await locationsCollection().count().get();
     final existingLocationsCount = existingLocations.count ?? 0;
     if (existingLocationsCount >= 10) {
@@ -54,23 +74,58 @@ class LocationsScreen extends StatelessWidget {
       return;
     }
 
-    await requestBackgroundLocationPermission(context);
-    final position = await Geolocator.getCurrentPosition();
-
     final controller = TextEditingController();
     final name = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Add Current Location'),
+        title: const Text('Name current location:'),
         content: TextField(controller: controller, decoration: const InputDecoration(hintText: 'Location Name')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('Save'),
+            child: const Text('Next'),
           ),
         ],
       ),
     );
+
+    if (name == null || name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Name cannot be empty')),
+      );
+      return;
+    }
+
+    await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Add Location'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(context, 'gps'),
+            child: const ListTile(
+              leading: Icon(Icons.location_on),
+              title: Text('Current GPS location'),
+            ),
+          ),
+          const SimpleDialogOption(
+            onPressed: null,
+            child: ListTile(
+              leading: Icon(Icons.wifi),
+              title: Text('WiFi network'),
+              subtitle: Text('Coming soon'),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    await _addCurrentGpsLocation(context, name);
+  }
+
+  Future<void> _addCurrentGpsLocation(BuildContext context, String? name) async {
+    var position = _position;
+    position ??= await Geolocator.getCurrentPosition();
 
     if (name != null) {
       final doc = await locationsCollection().add({
@@ -109,7 +164,7 @@ class LocationsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Saved Locations'),
               actions: [
-          IconButton(onPressed: () => _addCurrentLocation(context), icon: const Icon(Icons.add)),
+          IconButton(onPressed: () => _addLocation(context), icon: const Icon(Icons.add)),
         ],),
       body: StreamBuilder(
         stream: locationsCollection().snapshots(),
