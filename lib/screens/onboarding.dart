@@ -1,4 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
@@ -12,6 +14,8 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
+  FirebaseAnalytics analytics = FirebaseAnalytics.instance;
+
   int _page = 0;
 
   Future<void> _signIn() async {
@@ -21,8 +25,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         GoogleAuthProvider.credential(idToken: account.authentication.idToken),
       );
       await categoriesCollection().add({'name': 'personal'}); // add safeguard later
+      await FirebaseAnalytics.instance.logEvent(name: 'login', parameters: {'method': 'google'});
     } catch (e) {
-      debugPrint('Sign in failed: $e');
+      FirebaseCrashlytics.instance.recordError(e, StackTrace.current, reason: 'Google Sign In failed');
+      debugPrint('Google Sign in failed: $e');
     }
   }
 
@@ -30,7 +36,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     try {
       await FirebaseAuth.instance.signInAnonymously();
       await categoriesCollection().add({'name': 'personal'}); // add safeguard later
+      await FirebaseAnalytics.instance.logEvent(name: 'login', parameters: {'method': 'anonymous'});
     } catch (e) {
+      FirebaseCrashlytics.instance.recordError(e, StackTrace.current, reason: 'Anonymous Sign In failed');
       debugPrint('Anonymous sign in failed: $e');
     }
   }

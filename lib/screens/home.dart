@@ -7,6 +7,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:animated_text_kit/animated_text_kit.dart';
 import 'package:siri_wave/siri_wave.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 
 import '../activity_watch.dart';
 import '../collections.dart';
@@ -30,6 +31,8 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _recording = false;
   bool _thinking = false;
   Timer? _recordingTimer;
+
+  FirebaseAnalytics analytics = FirebaseAnalytics.instance;
 
   @override
   void initState() {
@@ -83,6 +86,8 @@ class _HomeScreenState extends State<HomeScreen> {
     await _methods.invokeMethod<void>('start');
     setState(() => _recording = true);
     _recordingTimer = Timer(_timeout, _toggle);
+
+    await FirebaseAnalytics.instance.logEvent(name: 'recording_started');
   }
 
   // Called by the bridge when it has recognized the speech
