@@ -116,6 +116,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           onChanged: null,
         ),
         const Divider(),
+        const ListTile(
+          title: Text('Poll period'),
+          trailing: Text('2 min'),
+          enabled: false,
+        ),
+        const Divider(),
         SizedBox(height: 16),
         TextButton(
           onPressed: _deleteAccount,

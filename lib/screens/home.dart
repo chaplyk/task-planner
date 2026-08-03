@@ -44,7 +44,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _watchActivity() async {
     await Permission.activityRecognition.request();
-    await startActivityWatch();
+    await startWatch();
   }
 
   Future<void> _rescheduleAllNotifications() async {

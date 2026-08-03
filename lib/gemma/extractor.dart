@@ -63,6 +63,7 @@ class ReminderExtractor {
       'The "activity" represents what the user must be doing to trigger reminder. '
       'The "activity" is one of ${activities.join(', ')}. '
       'For example driving a car is IN_VEHICLE. '
+      'Do not assume IN_VEHICLE unless user explicitly mentions driving or a vehicle. '
       'Use null if no activity fits.\n'
 
       'The "location" is one of $locations if user mentions it or null. '
