@@ -5,6 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../collections.dart';
+import '../widgets/typewriter.dart';
+
+const _pageColors = [
+  Color.fromARGB(255, 241, 176, 79),
+  Color.fromARGB(255, 92, 132, 226),
+  Color.fromARGB(255, 251, 255, 211),
+];
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -46,7 +53,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Column(
+      body: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        color: _pageColors[_page],
+        child: Column(
         children: [
           Expanded(
             child: PageView(
@@ -56,28 +66,24 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   icon: Icons.mic,
                   title: 'Record your thoughts',
                   text: 'NagadAI remembers so you don\'t have to',
+                  showExamples: true,
                 ),
                 _Page(
                   icon: Icons.auto_awesome,
-                  title: 'Use AI',
-                  text: 'AI Model will process your prompt.',
+                  title: 'AI Powered',
+                  text: 'Summarize, categorize and schedule your reminders',
                 ),
                 _Page(
                   icon: Icons.schedule,
-                  title: 'Smart triggers',
-                  text: 'Time, location, activity.. you name it.',
-                ),
-                _Page(
-                  icon: Icons.notifications_active,
-                  title: 'Get SMART reminders!',
-                  text: 'App will notify you when it matters!',
+                  title: 'Smart reminders',
+                  text: 'Time, location, activity.. you name it.\nNagadAI will notify you when it matters',
                 ),
               ],
             ),
           ),
           Padding(
             padding: const EdgeInsets.all(24),
-            child: _page == 3
+            child: _page == 2
                 ? Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -97,17 +103,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 : const Text('Swipe to continue'),
           ),
         ],
+        ),
       ),
     );
   }
 }
 
 class _Page extends StatelessWidget {
-  const _Page({required this.icon, required this.title, required this.text});
+  const _Page({required this.icon, required this.title, this.text, this.showExamples = false});
 
   final IconData icon;
   final String title;
-  final String text;
+  final String? text;
+  final bool showExamples;
 
   @override
   Widget build(BuildContext context) {
@@ -120,7 +128,11 @@ class _Page extends StatelessWidget {
           const SizedBox(height: 32),
           Text(title, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 12),
-          Text(text, textAlign: TextAlign.center),
+          Text(text!, textAlign: TextAlign.center),
+          if (showExamples) ...[
+            const SizedBox(height: 24),
+            const Typewriter(),
+          ],
         ],
       ),
     );

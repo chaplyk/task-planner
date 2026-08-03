@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:animated_text_kit/animated_text_kit.dart';
 import 'package:siri_wave/siri_wave.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 
@@ -14,6 +13,7 @@ import '../collections.dart';
 import '../models/reminder.dart';
 import '../notifications.dart';
 import '../gemma/extractor.dart';
+import '../widgets/typewriter.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -188,40 +188,11 @@ class _HomeScreenState extends State<HomeScreen> {
             DefaultTextStyle(
               style: TextStyle(
                 fontSize: 18.0,
-                fontFamily: 'Agne',
-                fontWeight: FontWeight.bold,
                 color: Theme.of(context).colorScheme.primary,
               ),
               child: const Text('Just say: Remind me to...'),
             ),
-            SizedBox(
-              height: 80,
-              child: DefaultTextStyle(
-                style: TextStyle(
-                  fontSize: 18.0,
-                  fontFamily: 'Agne',
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                child: AnimatedTextKit(
-                  repeatForever: true,
-                  pause: const Duration(milliseconds: 1000),
-                  animatedTexts: [
-                    TypewriterAnimatedText(
-                      'buy dog food next time I am driving',
-                      speed: const Duration(milliseconds: 150),
-                    ),
-                    TypewriterAnimatedText(
-                      'call mom tomorrow morning',
-                      speed: const Duration(milliseconds: 150),
-                    ),
-                    TypewriterAnimatedText(
-                      'pay bills when I get home',
-                      speed: const Duration(milliseconds: 150),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            const Typewriter(),
             SizedBox(height: 40),
             if (_recording) ...[
               SiriWaveform.ios7(

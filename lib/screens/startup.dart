@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../gemma/download.dart';
 import '../permissions.dart';
+import '../widgets/typewriter.dart';
 import 'root.dart';
 
 class StartupScreen extends StatefulWidget {
@@ -48,6 +49,8 @@ class _StartupScreenState extends State<StartupScreen> {
             Text('Downloading model... $_percent%'),
             const SizedBox(height: 16),
             LinearProgressIndicator(value: _percent / 100),
+            const SizedBox(height: 32),
+            const Typewriter(),
           ],
         ),
       ),
