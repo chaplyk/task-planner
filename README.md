@@ -1,9 +1,34 @@
 # NagadAI
 
-Flutter mobile application for smart reminders using Gemma 4 on the edge device.
+Flutter mobile application for smart context-aware reminders using Gemma 4 on the edge device.
 
 [![Trello](https://img.shields.io/badge/Trello-Board-0052CC?logo=trello&logoColor=white&style=for-the-badge)](https://trello.com/b/Oq9W55RI/nagadai)
 
-[![Firebase App Distribution](https://img.shields.io/badge/Firebase-Become%20Tester-FFCA28?logo=firebase&logoColor=white&style=for-the-badge)](https://appdistribution.firebase.google.com/i/1bd67d738f9299bb)
+## Install
 
-[![Play Store Internal Testing](https://img.shields.io/badge/Google%20Play-%20Testing-414141?logo=googleplay&logoColor=white&style=for-the-badge)](https://play.google.com/apps/internaltest/4701638909643361559)
+App has been published in Google Play for closed testing.
+
+To get to the app, your email needs to be added to the list of testers. Email me at nagadai@chaplyk.com to be added to the list.
+
+[![Play Store Internal Testing](https://img.shields.io/badge/Google%20Play-Internal%20Testing-414141?logo=googleplay&logoColor=white&style=for-the-badge)](https://play.google.com/apps/internaltest/4701638909643361559)
+
+
+## Screenshots
+
+### Onboarding
+
+| Screen 1 | Screen 2 | Screen 3 |
+|---|---|---|
+| ![onboarding](screenshots/onboarding_1.jpeg) | ![onboarding](screenshots/onboarding_2.jpeg) | ![onboarding](screenshots/onboarding_3.jpeg)
+
+### Model download
+
+![model](screenshots/model_download.jpeg)
+
+### Home (recording)
+
+![home](screenshots/home.jpeg)
+
+### Saved Locations (adding new location)
+
+![location](screenshots/location.jpeg)
