@@ -15,20 +15,8 @@ To get to the app, your email needs to be added to the list of testers. Email me
 
 ## Screenshots
 
-### Onboarding
 
-| Screen 1 | Screen 2 | Screen 3 |
-|---|---|---|
-| ![onboarding](screenshots/onboarding_1.jpeg) | ![onboarding](screenshots/onboarding_2.jpeg) | ![onboarding](screenshots/onboarding_3.jpeg)
-
-### Model download
-
-![model](screenshots/model_download.jpeg)
-
-### Home (recording)
-
-![home](screenshots/home.jpeg)
-
-### Saved Locations (adding new location)
-
-![location](screenshots/location.jpeg)
+| Login | Home | Settings | Locations |
+|---|---|---|---|
+| ![onboarding](screenshots/onboarding_3.jpeg) | ![home](screenshots/home.jpeg) | ![settings](screenshots/settings.jpeg)
+ | ![location](screenshots/location.jpeg)
