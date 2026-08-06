@@ -18,5 +18,4 @@ To get to the app, your email needs to be added to the list of testers. Email me
 
 | Login | Home | Settings | Locations |
 |---|---|---|---|
-| ![onboarding](screenshots/onboarding_3.jpeg) | ![home](screenshots/home.jpeg) | ![settings](screenshots/settings.jpeg)
- | ![location](screenshots/location.jpeg)
+| ![onboarding](screenshots/onboarding_3.jpeg) | ![home](screenshots/home.jpeg) | ![settings](screenshots/settings.jpeg) | ![location](screenshots/location.jpeg)
