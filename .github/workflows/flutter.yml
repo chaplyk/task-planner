@@ -32,6 +32,9 @@ jobs:
       - name: Analyze the code
         run: flutter analyze
 
+      - name: Decode google-services.json
+        run: echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 -d > android/app/google-services.json
+
       - name: Build debug
         run: flutter build apk --debug
 
@@ -40,4 +43,4 @@ jobs:
         with:
           args: apptesting:execute --app=1:354833570442:android:8ded6af77bac9d6039ab73  --test-dir=./tests ./build/app/outputs/apk/debug/app-debug.apk
         env:
-          GCP_SA_KEY: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+          GCP_SA_KEY: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
