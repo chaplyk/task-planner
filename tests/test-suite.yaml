@@ -1,0 +1,6 @@
+tests:
+- displayName: Login as guest
+  id: login-as-guest
+  steps:
+  - goal: Log in as a guest
+    finalScreenAssertion: Model download screen is visible

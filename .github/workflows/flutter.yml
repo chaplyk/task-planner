@@ -19,7 +19,7 @@ jobs:
     steps:
       - name: Clone repository
         uses: actions/checkout@v6
-        
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -30,3 +30,13 @@ jobs:
 
       - name: Analyze the code
         run: flutter analyze
+
+      - name: Build debug
+        run: flutter build apk --debug
+
+      - name: Run tests
+        uses: w9jds/firebase-action@master
+        with:
+          args: apptesting:execute --app=1:354833570442:android:8ded6af77bac9d6039ab73  --test-dir=./tests ./build/app/outputs/apk/debug/app-debug.apk
+        env:
+          GCP_SA_KEY: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
