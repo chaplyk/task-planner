@@ -8,9 +8,10 @@ name: Flutter
 on:
   push:
     branches: [ "main", "dev" ]
-    paths:                                                                                                                                                       
-      - 'lib/**'                                                                                                                                                 
+    paths:
+      - 'lib/**'
       - 'pubspec.*'
+  workflow_dispatch: {}
 
 jobs:
   build:
