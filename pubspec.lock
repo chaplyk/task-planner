@@ -367,10 +367,10 @@ packages:
     dependency: "direct main"
     description:
       name: flutter_gemma
-      sha256: "00093a86d841581f588b96b46994d33eb64213d47e9aa19489b72e4dde92692d"
+      sha256: a35c64e3a74f01d9ba3ec447714e8ee33bbc24250e6d9ec3f68e34711be31de7
       url: "https://pub.dev"
     source: hosted
-    version: "1.5.2"
+    version: "1.5.5"
   flutter_gemma_litertlm:
     dependency: "direct main"
     description:
@@ -819,10 +819,10 @@ packages:
     dependency: "direct main"
     description:
       name: permission_handler
-      sha256: "06149cba29bc46206f8b54b56065fe74b07602d2454a281287685ae66b5ab7b5"
+      sha256: e7317eb2eb611d1bf0386b6b974be9c50449f975f19a90a7b8ea013550302b30
       url: "https://pub.dev"
     source: hosted
-    version: "13.0.0"
+    version: "13.0.1"
   permission_handler_android:
     dependency: transitive
     description:
