@@ -8,9 +8,10 @@ name: Flutter
 on:
   push:
     branches: [ "main", "dev" ]
-    paths:                                                                                                                                                       
-      - 'lib/**'                                                                                                                                                 
+    paths:
+      - 'lib/**'
       - 'pubspec.*'
+  workflow_dispatch: {}
 
 jobs:
   build:
@@ -19,7 +20,7 @@ jobs:
     steps:
       - name: Clone repository
         uses: actions/checkout@v6
-        
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -30,3 +31,22 @@ jobs:
 
       - name: Analyze the code
         run: flutter analyze
+
+      - name: Decode google-services.json
+        run: echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 -d > android/app/google-services.json
+
+      - name: Decode keystore
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/upload-keystore.jks
+
+      - name: Write key.properties
+        run: echo "${{ secrets.ANDROID_KEY_PROPERTIES }}" > android/key.properties
+
+      - name: Build
+        run: flutter build apk
+
+      - name: Run tests
+        uses: w9jds/firebase-action@master
+        with:
+          args: --debug apptesting:execute --app=1:354833570442:android:8ded6af77bac9d6039ab73  --test-dir=./tests ./build/app/outputs/apk/release/app-release.apk
+        env:
+          GCP_SA_KEY: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
