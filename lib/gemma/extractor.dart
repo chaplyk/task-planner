@@ -1,3 +1,4 @@
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 
@@ -37,9 +38,18 @@ class ReminderExtractor {
     
     try {
       await session.addQueryChunk(Message(text: _prompt(transcript), isUser: true));
-      final raw = await session.getResponse();
-      debugPrint('Model output: $raw');
-      return Reminder.tryParse(raw, transcript: transcript);
+      final output = await session.getResponse();
+      debugPrint('Model output: $output');
+      final reminder = Reminder.tryParse(output, transcript: transcript);
+      if (reminder == null) {
+        await FirebaseCrashlytics.instance.recordError(
+          Exception('LLM extraction error'),
+          StackTrace.current,
+          reason: 'Reminder extraction failed',
+          information: ['transcript: $transcript', 'model output: $output'],
+        );
+      }
+      return reminder;
     } finally {
       await session.close();
     }
