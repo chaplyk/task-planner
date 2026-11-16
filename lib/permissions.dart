@@ -3,35 +3,57 @@ import 'package:geolocator/geolocator.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import 'activity_watch.dart';
+import 'models/reminder.dart';
 import 'notifications.dart';
+import 'place_types.dart';
 
+// Asked at most once per app run, so saving several place reminders doesn't nag.
+bool _askedBackgroundLocation = false;
+
+/// Asks for location access for place reminders: first an in-app disclosure of what
+/// is collected and why, then the system prompts (while in use, then "all the time").
 Future<void> requestBackgroundLocationPermission(BuildContext context) async {
-  // if background location permission is already granted, do nothing
-  if (await Geolocator.checkPermission() == LocationPermission.always) return;
-
-  // else request background location permission
-  await Geolocator.requestPermission();
-
+  var permission = await Geolocator.checkPermission();
+  if (permission == LocationPermission.always) return;
+  final hasForeground = permission == LocationPermission.whileInUse;
+  // With "while in use" the app can still save a place, so don't ask again this run.
+  if (hasForeground && _askedBackgroundLocation) return;
   if (!context.mounted) return;
-  await showDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Background location'),
-      content: const Text(
-        'To send location-based reminders, the app requires background location access. \n'
-        'Please select "Allow all the time" in Permissions -> Location settings.',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () {
-            Navigator.pop(context);
-            Geolocator.openAppSettings();
-          },
-          child: const Text('Open settings'),
-        ),
-      ],
-    ),
+
+  final accepted = await showPrimeSheet(
+    context,
+    emoji: '📍',
+    title: 'Remind you at the right place',
+    body: 'NagadAI collects location data to remind you when you arrive at or leave your saved places '
+        'and nearby stores, even when the app is closed or not in use. '
+        'Choose "Allow all the time" on the next screen to turn this on.',
+    cta: 'Continue',
   );
+  _askedBackgroundLocation = true;
+  if (!accepted) return;
+
+  if (!hasForeground) {
+    permission = await Geolocator.requestPermission();
+    if (permission != LocationPermission.whileInUse) return; // denied, or already "always"
+  }
+  // Android only offers "Allow all the time" after "while in use" has been granted.
+  await Permission.locationAlways.request();
+}
+
+/// Gets what a reminder's trigger needs to work in the background: the permission
+/// (activity, or location for stores) and the watching service.
+Future<void> prepareTrigger(BuildContext context, Reminder reminder) async {
+  switch (reminder.triggerType) {
+    case 'activity':
+      if (await ensureActivityPermission(context)) await startWatch();
+    case 'location':
+      // Store reminders are found by position in the background, which needs "Allow all the time".
+      if (isStoreType(reminder.location)) await requestBackgroundLocationPermission(context);
+      await startWatch();
+    default:
+      break;
+  }
 }
 
 Future<bool> notificationsAllowed() => AwesomeNotifications().isNotificationAllowed();

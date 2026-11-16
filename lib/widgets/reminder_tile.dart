@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../collections.dart';
+import 'reminder_composer.dart';
 
 String triggerEmoji(String? triggerType) => switch (triggerType) {
       'time' => '⏰',
@@ -81,7 +82,11 @@ class _ReminderTileState extends State<ReminderTile> {
     final done = widget.done;
     final checked = done != _ticking;
     final overdue = !done && isOverdue(data);
-    final condition = data['condition'] as String?;
+    // A time is formatted now, not when it was saved: a stored "Today at 6 PM" goes stale overnight.
+    final when = data['when'];
+    final condition = data['triggerType'] == 'time' && when is Timestamp
+        ? formatReminderWhen(context, when.toDate())
+        : data['condition'] as String?;
 
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),

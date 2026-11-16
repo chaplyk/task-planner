@@ -2,9 +2,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../account.dart';
 import '../activity_watch.dart';
 import '../collections.dart';
 import '../gemma/download.dart';
@@ -32,7 +32,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Delete account'),
         content: const Text(
-          'Are you sure?',
+          'This permanently deletes your account and all your reminders, lists, '
+          'categories and saved places. It cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -47,16 +48,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
 
-    if (confirmed == true) {
-      await FirebaseAuth.instance.currentUser!.delete();
-      await GoogleSignIn.instance.signOut();
+    if (confirmed != true || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await deleteAccount();
+    } catch (e) {
+      debugPrint('Delete account failed: $e');
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Could not finish deleting your account. Please try again.')),
+      );
     }
   }
 
   Future<void> _signOut() async {
     try {
-      await GoogleSignIn.instance.signOut();
-      await FirebaseAuth.instance.signOut();
+      await signOut();
     } catch (e) {
       debugPrint('Sign out failed: $e');
     }

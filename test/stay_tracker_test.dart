@@ -44,6 +44,16 @@ void main() {
     expect(stay.update(_at(50.0, 30.0), t0.add(m(26))), isTrue);
   });
 
+  test('stayId changes only when the user moves to a new area', () {
+    final stay = StayTracker();
+    stay.update(_at(50.0, 30.0), t0);
+    final first = stay.stayId;
+    stay.update(_at(50.0004, 30.0), t0.add(m(5)));
+    expect(stay.stayId, first);
+    stay.update(_at(50.01, 30.0), t0.add(m(10))); // drove away
+    expect(stay.stayId, isNot(first));
+  });
+
   test('a failed lookup is retried, at most 3 times per stay', () {
     final stay = StayTracker();
     stay.update(_at(50.0, 30.0), t0);

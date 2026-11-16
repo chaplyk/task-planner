@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_activity_recognition/flutter_activity_recognition.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:geolocator/geolocator.dart' hide ActivityType;
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -57,6 +58,8 @@ class _ActivityTaskHandler extends TaskHandler {
   ActivityType _activity = ActivityType.UNKNOWN;
   final _stores = StoreReminderWatcher();
   String? _lastWifiName;
+  bool _wifiKnown = false;
+  int _missedWifiReads = 0;
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
@@ -75,14 +78,45 @@ class _ActivityTaskHandler extends TaskHandler {
     if (FirebaseAuth.instance.currentUser == null) return;
 
     debugPrint('Current activity: ${_activity.name}');
-    _checkActivityReminders(_activity.name);
+    _checkActivityReminders(_activity.name).catchError((Object e) => debugPrint('Activity check failed: $e'));
     _stores.tick(timestamp).catchError((Object e) => debugPrint('Store check failed: $e'));
+    try {
+      await _checkWifi();
+    } catch (e) {
+      debugPrint('Wi-Fi check failed: $e');
+    }
+  }
+
+  /// Fires Wi-Fi place reminders when the network really changed. A missing name
+  /// is only trusted as "left" when Android would have told us the name.
+  Future<void> _checkWifi() async {
+    // Android hides the network name without location access, and in the background
+    // without "Allow all the time". A null name then means "unknown", not "disconnected".
+    final permission = await Geolocator.checkPermission();
+    if (permission != LocationPermission.always && permission != LocationPermission.whileInUse) return;
+    if (!await Geolocator.isLocationServiceEnabled()) return;
 
     final wifiName = await NetworkInfo().getWifiName();
-    if (wifiName == _lastWifiName) return;
-    if (_lastWifiName != null) _checkWifiReminders(_lastWifiName, 'exit');
+    if (wifiName == null && permission != LocationPermission.always) return;
+
+    if (!_wifiKnown) {
+      // First reading after the service (re)starts: where the user already is, not an arrival.
+      _wifiKnown = true;
+      _lastWifiName = wifiName;
+      return;
+    }
+    if (wifiName == _lastWifiName) {
+      _missedWifiReads = 0;
+      return;
+    }
+    // A brief drop is not leaving: the network must stay gone for a second poll.
+    if (wifiName == null && ++_missedWifiReads < 2) return;
+    _missedWifiReads = 0;
+
+    final previous = _lastWifiName;
     _lastWifiName = wifiName;
-    if (wifiName != null) _checkWifiReminders(wifiName, 'enter');
+    if (previous != null) await _checkWifiReminders(previous, 'exit');
+    if (wifiName != null) await _checkWifiReminders(wifiName, 'enter');
   }
 
   @override
