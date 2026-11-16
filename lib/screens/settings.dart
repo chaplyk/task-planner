@@ -1,7 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:material_tag_editor/tag_editor.dart';
+import '../widgets/tag_input.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../activity_watch.dart';
@@ -101,15 +101,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           stream: categoriesCollection().snapshots(),
           builder: (context, snapshot) {
             final docs = snapshot.data?.docs ?? [];
-            return TagEditor(
-              length: docs.length,
-              delimiters: const [',', ' '],
-              hasAddButton: true,
-              inputDecoration: const InputDecoration(
-                border: InputBorder.none,
-                hintText: 'Add Category...',
-              ),
-              onTagChanged: (newValue) {
+            return TagInput(
+              tags: [for (final doc in docs) doc['name'] as String],
+              hintText: 'Add Category...',
+              onAdd: (newValue) {
                 if (docs.length >= 5) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('You can only have up to 5 categories')),
@@ -133,13 +128,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 categoriesCollection().add({'name': newValue});
               },
-              tagBuilder: (context, index) => Chip(
-                label: Text(docs[index]['name']),
-                deleteIcon: const Icon(Icons.close, size: 18),
-                onDeleted: () {
-                  docs[index].reference.delete();
-                },
-              ),
+              onDelete: (index) => docs[index].reference.delete(),
             );
           },
         ),
