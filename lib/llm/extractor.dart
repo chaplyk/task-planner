@@ -6,6 +6,7 @@ import 'package:flutter_gemma/flutter_gemma.dart';
 import '../collections.dart';
 import '../gemma/download.dart';
 import '../models/reminder.dart';
+import '../place_types.dart';
 import 'model_choice.dart';
 
 const _systemInstruction =
@@ -19,6 +20,7 @@ class ReminderExtractor {
   GenerativeModel? _gemini;
   String categories = '';
   String locations = '';
+  List<String> _lists = const [];
 
   Future<Reminder?> extract(String transcript) async {
     if (transcript.trim().isEmpty) return null;
@@ -29,9 +31,12 @@ class ReminderExtractor {
     final locationDocs = await locationsCollection().get();
     locations = locationDocs.docs.map((doc) => doc['name'] as String).join(', ');
 
+    final listDocs = await listsCollection().get();
+    _lists = [for (final d in listDocs.docs) d['name'] as String];
+
     final output = await _generate(_prompt(transcript));
     debugPrint('Model output: $output');
-    final reminder = Reminder.tryParse(output, transcript: transcript);
+    final reminder = _validList(Reminder.tryParse(output, transcript: transcript));
     if (reminder == null) {
       await FirebaseCrashlytics.instance.recordError(
         Exception('LLM extraction error'),
@@ -45,6 +50,13 @@ class ReminderExtractor {
       );
     }
     return reminder;
+  }
+
+  /// Keeps the list only if it is one of the user's lists (matching its exact spelling).
+  Reminder? _validList(Reminder? r) {
+    if (r == null || r.list == null) return r;
+    final match = _lists.where((l) => l.toLowerCase() == r.list!.toLowerCase()).firstOrNull;
+    return match == r.list ? r : r.withList(match);
   }
 
   Future<String> _generate(String prompt) async {
@@ -100,10 +112,13 @@ class ReminderExtractor {
 
   Future<void> close() => _closeLocal();
 
+  // "grocery" (any supermarket, ...), "hardware" (...), "pharmacy" (...)
+  static final _storeTypesPrompt = storeTypes.entries.map((e) => '"${e.key}" (${e.value.aiHint})').join(', ');
+
   String _prompt(String transcript) =>
       'Extract the task from the reminder into '
       '{"summary": "...", "when": null, "condition": null, "activity": null, '
-      '"location": null, "locationEvent": null, "category": null, "confidence": 0.0}.\n'
+      '"location": null, "locationEvent": null, "category": null, "list": null, "confidence": 0.0}.\n'
       'The summary is short and imperative, without any time or place.\n'
 
       'If time mentioned, fill the "when" accordingly.\n'
@@ -118,10 +133,12 @@ class ReminderExtractor {
 
       'The "location" is the place the user mentions. '
       'If it matches one of the saved places ($locations), use that exact name. '
+      'If the user means a kind of store rather than a saved place, use one of these: $_storeTypesPrompt. '
       'Otherwise use the place name as the user said it, for example "gym". '
       'Use null if no place is mentioned. '
 
       'The "locationEvent" can be "enter" or "exit". '
+      'When a location is set, use "enter" unless the user talks about leaving. '
       'Use null if the reminder is not tied to a location.\n'
 
       'The "condition" is the time or activity as said in the reminder. '
@@ -129,6 +146,10 @@ class ReminderExtractor {
 
       'The "category" is the type of task.\n'
       'The "category" is one of $categories or "other".\n'
+
+      '${_lists.isEmpty ? 'The "list" is null.' : 'The "list" is the user\'s list this task belongs in, one of: ${_lists.map((l) => '"$l"').join(', ')}. '
+          'Pick the list whose purpose best fits the task, for example groceries go in a shopping list. '
+          'Use null if no list clearly fits.'}\n'
 
       'The "confidence" is how useful this reminder is from 0.0 to 1.0.\n'
       'The "confidence" is low when when it is vague or meaningless.\n\n'

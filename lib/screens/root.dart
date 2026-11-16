@@ -1,7 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import 'home.dart';
-import 'reminders.dart';
+import 'lists_screen.dart';
 import 'settings.dart';
 
 // base screen with bottom navigation
@@ -24,7 +24,7 @@ class _RootScreenState extends State<RootScreen> {
         index: _currentIndex,
         children: [
           HomeScreen(onSeeAll: () => _select(1)),
-          const RemindersScreen(),
+          const ListsScreen(),
           const SettingsScreen(),
         ],
       ),
@@ -40,7 +40,7 @@ class _RootScreenState extends State<RootScreen> {
           NavigationDestination(
             icon: Icon(Icons.checklist_outlined),
             selectedIcon: Icon(Icons.checklist),
-            label: 'Reminders',
+            label: 'Lists',
           ),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined),

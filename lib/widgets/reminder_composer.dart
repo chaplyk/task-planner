@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../collections.dart';
+import '../lists.dart';
 import '../models/reminder.dart';
 import '../permissions.dart';
 import '../place_types.dart';
@@ -52,21 +53,25 @@ Future<Reminder?> showReminderComposer(
   BuildContext context, {
   Reminder? initial,
   String title = 'New reminder',
+  String? list,
 }) {
   return showModalBottomSheet<Reminder>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
     useSafeArea: true,
-    builder: (context) => _Composer(initial: initial, title: title),
+    builder: (context) => _Composer(initial: initial, title: title, list: list),
   );
 }
 
 class _Composer extends StatefulWidget {
-  const _Composer({this.initial, required this.title});
+  const _Composer({this.initial, required this.title, this.list});
 
   final Reminder? initial;
   final String title;
+
+  /// List preselected for a new task (e.g. when adding from inside a list).
+  final String? list;
 
   @override
   State<_Composer> createState() => _ComposerState();
@@ -85,6 +90,7 @@ class _ComposerState extends State<_Composer> {
   late String? _location = widget.initial?.location;
   late String _locationEvent = widget.initial?.locationEvent ?? 'enter';
   late String? _category = widget.initial?.category;
+  late String? _list = widget.initial?.list ?? widget.list;
 
   @override
   void initState() {
@@ -134,6 +140,7 @@ class _ComposerState extends State<_Composer> {
         location: _trigger == _Trigger.location ? _location : null,
         locationEvent: _trigger == _Trigger.location ? _locationEvent : null,
         category: _category ?? 'other',
+        list: _list,
         confidence: 1.0,
       ),
     );
@@ -184,10 +191,10 @@ class _ComposerState extends State<_Composer> {
               child: SegmentedButton<_Trigger>(
                 showSelectedIcon: false,
                 segments: const [
-                  ButtonSegment(value: _Trigger.time, label: Text('⏰ Time')),
-                  ButtonSegment(value: _Trigger.activity, label: Text('🏃 Activity')),
-                  ButtonSegment(value: _Trigger.location, label: Text('📍 Place')),
                   ButtonSegment(value: _Trigger.none, label: Text('Anytime')),
+                  ButtonSegment(value: _Trigger.time, label: Text('Time')),
+                  ButtonSegment(value: _Trigger.activity, label: Text('Activity')),
+                  ButtonSegment(value: _Trigger.location, label: Text('Place')),
                 ],
                 selected: {_trigger},
                 onSelectionChanged: (s) => _selectTrigger(s.first),
@@ -211,6 +218,9 @@ class _ComposerState extends State<_Composer> {
                   ),
               },
             ),
+            const SizedBox(height: 24),
+            _Label('List'),
+            _listOptions(),
             const SizedBox(height: 24),
             _Label('Category'),
             _categoryOptions(),
@@ -291,7 +301,6 @@ class _ComposerState extends State<_Composer> {
   }
 
   Widget _locationOptions() {
-    final labelStyle = Theme.of(context).textTheme.labelLarge;
     return StreamBuilder(
       stream: locationsCollection().snapshots(),
       builder: (context, snapshot) {
@@ -301,8 +310,20 @@ class _ComposerState extends State<_Composer> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Any store', style: labelStyle),
-            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<String>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(value: 'enter', label: Text('When I arrive')),
+                  ButtonSegment(value: 'exit', label: Text('When I leave')),
+                ],
+                selected: {_locationEvent},
+                onSelectionChanged: (s) => setState(() => _locationEvent = s.first),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const PlaceSectionHeader('Nearby stores'),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -316,8 +337,7 @@ class _ComposerState extends State<_Composer> {
               ],
             ),
             const SizedBox(height: 16),
-            Text('My places', style: labelStyle),
-            const SizedBox(height: 8),
+            const PlaceSectionHeader('My places'),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -338,16 +358,30 @@ class _ComposerState extends State<_Composer> {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            SegmentedButton<String>(
-              showSelectedIcon: false,
-              segments: const [
-                ButtonSegment(value: 'enter', label: Text('When I arrive')),
-                ButtonSegment(value: 'exit', label: Text('When I leave')),
-              ],
-              selected: {_locationEvent},
-              onSelectionChanged: (s) => setState(() => _locationEvent = s.first),
-            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _listOptions() {
+    return StreamBuilder(
+      stream: listsCollection().orderBy('createdAt').snapshots(),
+      builder: (context, snapshot) {
+        final names = <String?>[
+          null,
+          for (final d in snapshot.data?.docs ?? const []) d.data()['name'] as String,
+        ];
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final name in names)
+              ChoiceChip(
+                label: Text(name ?? inboxName),
+                selected: _list == name,
+                onSelected: (_) => setState(() => _list = name),
+              ),
           ],
         );
       },
@@ -393,6 +427,29 @@ class _Label extends StatelessWidget {
       child: Text(
         text,
         style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+      ),
+    );
+  }
+}
+
+/// Small uppercase header above a group of place chips.
+class PlaceSectionHeader extends StatelessWidget {
+  const PlaceSectionHeader(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        text.toUpperCase(),
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: theme.colorScheme.primary,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1.2,
+        ),
       ),
     );
   }

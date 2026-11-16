@@ -40,7 +40,6 @@ class ReminderTile extends StatefulWidget {
   const ReminderTile({
     super.key,
     required this.data,
-    this.emoji,
     this.onTap,
     this.onToggle,
     this.done = false,
@@ -48,7 +47,6 @@ class ReminderTile extends StatefulWidget {
   });
 
   final Map<String, dynamic> data;
-  final String? emoji;
   final VoidCallback? onTap;
 
   /// Completes an open reminder, or reopens a done one. Shows a checkbox when set.
@@ -109,32 +107,19 @@ class _ReminderTileState extends State<ReminderTile> {
             onTap: widget.onTap,
             borderRadius: BorderRadius.circular(22),
             child: Padding(
-              padding: EdgeInsets.fromLTRB(widget.onToggle == null ? 14 : 4, 14, 16, 14),
+              padding: EdgeInsets.fromLTRB(14, 12, widget.onToggle == null ? 16 : 4, 12),
               child: Row(
                 children: [
-                  if (widget.onToggle != null)
-                    IconButton(
-                      onPressed: _toggle,
-                      tooltip: done ? 'Reopen' : 'Mark as done',
-                      icon: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 180),
-                        child: Icon(
-                          checked ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                          key: ValueKey(checked),
-                          color: checked ? scheme.primary : scheme.outline,
-                          size: 26,
-                        ),
-                      ),
-                    ),
                   Container(
-                    width: 44,
-                    height: 44,
+                    width: 40,
+                    height: 40,
                     decoration: BoxDecoration(
                       color: overdue ? scheme.errorContainer : scheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(14),
+                      shape: BoxShape.circle,
                     ),
                     child: Icon(
                       triggerIcon(data),
+                      size: 20,
                       color: overdue ? scheme.onErrorContainer : scheme.onPrimaryContainer,
                     ),
                   ),
@@ -167,10 +152,20 @@ class _ReminderTileState extends State<ReminderTile> {
                       ],
                     ),
                   ),
-                  if (widget.emoji != null && widget.emoji!.isNotEmpty) ...[
-                    const SizedBox(width: 8),
-                    Text(widget.emoji!, style: const TextStyle(fontSize: 24)),
-                  ],
+                  if (widget.onToggle != null)
+                    IconButton(
+                      onPressed: _toggle,
+                      tooltip: done ? 'Reopen' : 'Mark as done',
+                      icon: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 180),
+                        child: Icon(
+                          checked ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                          key: ValueKey(checked),
+                          color: checked ? scheme.primary : scheme.outline,
+                          size: 28,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),

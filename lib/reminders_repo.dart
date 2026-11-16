@@ -31,6 +31,7 @@ Reminder reminderFromDoc(ReminderDoc doc) {
     location: data['location'],
     locationEvent: data['locationEvent'],
     category: data['category'],
+    list: data['list'],
     confidence: (data['confidence'] as num?)?.toDouble(),
   );
 }
@@ -46,6 +47,7 @@ Future<void> updateReminder(ReminderDoc doc, Reminder updated) async {
     'location': updated.location,
     'locationEvent': updated.locationEvent,
     'category': updated.category,
+    'list': updated.list,
     'notified': false,
   });
   final id = int.parse(doc.id);
@@ -87,10 +89,31 @@ Future<void> _schedule(int id, String summary, String? triggerType, DateTime? wh
   if (triggerType == 'time' && when != null) await scheduleNotification(id, summary, when);
 }
 
-/// Background AI refinement: replaces the summary and optionally the category.
-Future<void> updateReminderText(int id, {required String summary, String? category}) async {
+/// Background AI refinement: replaces the summary and optionally the category and list.
+Future<void> updateReminderText(int id, {required String summary, String? category, String? list}) async {
   await remindersCollection().doc('$id').update({
     'summary': summary,
     'category': ?category,
+    'list': ?list,
   });
+}
+
+/// Renames a list and moves its tasks along with it.
+Future<void> renameList(String listId, String oldName, String newName) async {
+  final batch = FirebaseFirestore.instance.batch();
+  batch.update(listsCollection().doc(listId), {'name': newName});
+  for (final d in (await remindersCollection().where('list', isEqualTo: oldName).get()).docs) {
+    batch.update(d.reference, {'list': newName});
+  }
+  await batch.commit();
+}
+
+/// Deletes a list; its tasks move to the Inbox.
+Future<void> deleteList(String listId, String name) async {
+  final batch = FirebaseFirestore.instance.batch();
+  batch.delete(listsCollection().doc(listId));
+  for (final d in (await remindersCollection().where('list', isEqualTo: name).get()).docs) {
+    batch.update(d.reference, {'list': null});
+  }
+  await batch.commit();
 }

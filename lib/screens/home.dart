@@ -149,11 +149,30 @@ class _HomeScreenState extends State<HomeScreen> {
     _voiceDraft = false;
     final ready = draft.reminder;
     if (ready == null) {
-      await _process(draft.text, source: source, prefetched: draft.ai);
+      final listOverride = draft.listManual ? (list: draft.list) : null;
+      await _process(draft.text, source: source, prefetched: draft.ai, listOverride: listOverride);
       return;
     }
     final id = await _commit(ready, source: source);
-    if (id != null && draft.needsRefine) _refine(id, draft.text, keepCategory: draft.categoryManual);
+    if (id != null && draft.needsRefine) {
+      _refine(id, draft.text, keepCategory: draft.categoryManual, keepList: draft.listManual);
+    }
+  }
+
+  /// Saved instantly from local rules; let AI polish the summary, category and list afterwards.
+  Future<void> _refine(int id, String text, {required bool keepCategory, required bool keepList}) async {
+    try {
+      final r = await _extractor.extract(text);
+      if (r == null || r.summary.isEmpty) return;
+      await updateReminderText(
+        id,
+        summary: r.summary,
+        category: keepCategory ? null : r.category,
+        list: keepList ? null : r.list,
+      );
+    } catch (e) {
+      debugPrint('Refinement failed: $e');
+    }
   }
 
   Future<Reminder?> _safeExtract(String text) async {
@@ -165,21 +184,16 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  /// Saved instantly from local rules; let AI polish the summary and category afterwards.
-  Future<void> _refine(int id, String text, {required bool keepCategory}) async {
-    try {
-      final r = await _extractor.extract(text);
-      if (r == null || r.summary.isEmpty) return;
-      await updateReminderText(id, summary: r.summary, category: keepCategory ? null : r.category);
-    } catch (e) {
-      debugPrint('Refinement failed: $e');
-    }
-  }
-
   void _tryExample(String example) => _process('Remind me to $example', source: 'suggestion');
 
   /// Shows a pending card immediately, then turns it into a real reminder.
-  Future<void> _process(String text, {required String source, Reminder? prefetched}) async {
+  /// [listOverride] is the list the user picked by hand (its `list` may be null = Inbox).
+  Future<void> _process(
+    String text, {
+    required String source,
+    Reminder? prefetched,
+    ({String? list})? listOverride,
+  }) async {
     final pending = _Pending(text);
     setState(() => _pending.insert(0, pending));
 
@@ -202,6 +216,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() => pending.failed = true);
       return;
     }
+    if (listOverride != null) reminder = reminder.withList(listOverride.list);
     if ((reminder.confidence ?? 0) < 0.7) {
       reminder = await showQuickCheck(context, reminder);
       if (reminder == null) {
@@ -315,6 +330,7 @@ class _HomeScreenState extends State<HomeScreen> {
       location: place,
       locationEvent: place == null ? null : event,
       category: r.category,
+      list: r.list,
       confidence: r.confidence,
     );
   }
@@ -553,53 +569,46 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _upNext(ThemeData theme, List<_Doc> docs) {
     final shown = docs.take(_upNextCount).toList();
-    return StreamBuilder(
-      stream: categoryEmojiStream(),
-      builder: (context, snapshot) {
-        final emoji = snapshot.data ?? const {};
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            Row(
-              children: [
-                Text('Up next', style: theme.textTheme.titleLarge),
-                const Spacer(),
-                if (widget.onSeeAll != null && docs.length > shown.length)
-                  TextButton(onPressed: widget.onSeeAll, child: Text('See all ${docs.length}')),
-              ],
-            ),
-            const SizedBox(height: 8),
-            for (final p in _pending)
-              Padding(
-                key: p.id,
-                padding: const EdgeInsets.only(bottom: 10),
-                child: PendingTile(
-                  text: p.text,
-                  failed: p.failed,
-                  onTap: p.failed ? () => _fixFailed(p) : null,
-                  onDismiss: () => setState(() => _pending.remove(p)),
-                ),
-              ),
-            for (final doc in shown)
-              Padding(
-                key: ValueKey(doc.id),
-                padding: const EdgeInsets.only(bottom: 10),
-                child: SwipeableReminder(
-                  key: ValueKey('swipe-${doc.id}'),
-                  onPrimary: () => _complete(doc),
-                  onDelete: () => _delete(doc),
-                  child: ReminderTile(
-                    data: doc.data(),
-                    emoji: emoji[doc.data()['category']],
-                    highlight: _highlight.contains(doc.id),
-                    onTap: () => _edit(doc),
-                    onToggle: () => _complete(doc),
-                  ),
-                ),
-              ),
+            Text('Up next', style: theme.textTheme.titleLarge),
+            const Spacer(),
+            if (widget.onSeeAll != null && docs.length > shown.length)
+              TextButton(onPressed: widget.onSeeAll, child: Text('See all ${docs.length}')),
           ],
-        );
-      },
+        ),
+        const SizedBox(height: 8),
+        for (final p in _pending)
+          Padding(
+            key: p.id,
+            padding: const EdgeInsets.only(bottom: 10),
+            child: PendingTile(
+              text: p.text,
+              failed: p.failed,
+              onTap: p.failed ? () => _fixFailed(p) : null,
+              onDismiss: () => setState(() => _pending.remove(p)),
+            ),
+          ),
+        for (final doc in shown)
+          Padding(
+            key: ValueKey(doc.id),
+            padding: const EdgeInsets.only(bottom: 10),
+            child: SwipeableReminder(
+              key: ValueKey('swipe-${doc.id}'),
+              onPrimary: () => _complete(doc),
+              onDelete: () => _delete(doc),
+              child: ReminderTile(
+                data: doc.data(),
+                highlight: _highlight.contains(doc.id),
+                onTap: () => _edit(doc),
+                onToggle: () => _complete(doc),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

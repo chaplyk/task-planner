@@ -10,10 +10,10 @@ bump:
 	echo "Build $$cur -> $$new"
 
 build: bump
-	flutter build apk
+	flutter build apk $(DART_DEFINES)
 
 build-release: bump
-	flutter build appbundle --release
+	flutter build appbundle --release $(DART_DEFINES)
 
 run: bump
 	flutter run $(DART_DEFINES)

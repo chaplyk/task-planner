@@ -63,6 +63,7 @@ class _QuickCheckState extends State<_QuickCheck> {
         location: _r.location,
         locationEvent: _r.locationEvent,
         category: category ?? _r.category,
+        list: _r.list,
         confidence: 1.0,
       );
 

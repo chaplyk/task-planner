@@ -15,6 +15,7 @@ class Reminder {
     this.location,
     this.locationEvent,
     this.category,
+    this.list,
     this.confidence,
     this.notified = false,
   });
@@ -27,8 +28,27 @@ class Reminder {
   final String? location;
   final String? locationEvent;
   final String? category;
+
+  /// Name of the user's list this task belongs to; null means the default Inbox.
+  final String? list;
   final double? confidence;
   final bool notified;
+
+  /// Same reminder in another list (null = Inbox).
+  Reminder withList(String? list) => Reminder(
+    summary: summary,
+    when: when,
+    condition: condition,
+    transcript: transcript,
+    triggerType: triggerType,
+    activity: activity,
+    location: location,
+    locationEvent: locationEvent,
+    category: category,
+    list: list,
+    confidence: confidence,
+    notified: notified,
+  );
 
   // Parse a decoded JSON map
   factory Reminder.fromJson(Map<String, dynamic> json, {String? transcript}) {
@@ -36,6 +56,7 @@ class Reminder {
     final when = json['when'] is String ? DateTime.tryParse(json['when']) : null;
     final condition = json['condition'];
     final category = json['category'];
+    final list = json['list'] is String && (json['list'] as String).trim().isNotEmpty ? json['list'] as String : null;
     final confidence = json['confidence'];
     final activity = activities.contains(json['activity']) ? json['activity'] : null;
     final location = json['location'];
@@ -64,6 +85,7 @@ class Reminder {
       location: location,
       locationEvent: locationEvent,
       category: category,
+      list: list,
       confidence: confidence,
     );
   }
@@ -76,6 +98,7 @@ class Reminder {
     'location': location,
     'locationEvent': locationEvent,
     'category': category,
+    'list': list,
     'confidence': confidence,
     'notified': notified,
   };
@@ -91,6 +114,7 @@ class Reminder {
     'location': location,
     'locationEvent': locationEvent,
     'category': category,
+    'list': list,
     'confidence': confidence,
     'notified': notified,
     'createdAt': Timestamp.now(),
@@ -131,5 +155,5 @@ class Reminder {
       'Reminder(summary: $summary, when: $when, condition: $condition, '
       'transcript: $transcript, triggerType: $triggerType, activity: $activity, '
       'location: $location, locationEvent: $locationEvent, '
-      'category: $category, confidence: $confidence, notified: $notified)';
+      'category: $category, list: $list, confidence: $confidence, notified: $notified)';
 }

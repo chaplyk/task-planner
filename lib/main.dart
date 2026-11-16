@@ -11,6 +11,7 @@ import 'package:native_geofence/native_geofence.dart';
 
 import 'activity_watch.dart';
 import 'llm/model_choice.dart';
+import 'theme_choice.dart';
 import 'notifications.dart';
 import 'screens/onboarding.dart';
 import 'screens/startup.dart';
@@ -35,6 +36,7 @@ Future<void> main() async {
   await FlutterGemma.initialize(inferenceEngines: [LiteRtLmEngine()]);
   await loadModelChoice();
   await loadPollPeriod();
+  await loadThemeMode();
   await initNotifications();
   // Notification permission is asked after the first reminder, not at launch.
   await NativeGeofenceManager.instance.initialize();
@@ -46,12 +48,15 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: _theme(Brightness.light),
-      darkTheme: _theme(Brightness.dark),
-      themeMode: ThemeMode.system,
-      home: const SplashScreen(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeModeNotifier,
+      builder: (context, mode, _) => MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: _theme(Brightness.light),
+        darkTheme: _theme(Brightness.dark),
+        themeMode: mode,
+        home: const SplashScreen(),
+      ),
     );
   }
 }

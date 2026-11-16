@@ -1,4 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -8,6 +10,9 @@ import '../collections.dart';
 import '../gemma/download.dart';
 import '../llm/extractor.dart';
 import '../llm/model_choice.dart';
+import '../place_types.dart';
+import '../store_detection.dart';
+import '../theme_choice.dart';
 import 'categories.dart';
 import 'locations.dart';
 import 'model.dart';
@@ -20,6 +25,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  final _packageInfo = PackageInfo.fromPlatform();
   Future<void> _deleteAccount() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -54,6 +60,88 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (e) {
       debugPrint('Sign out failed: $e');
     }
+  }
+
+  /// Debug: runs the same lookup the background store check uses, right here.
+  Future<void> _whereAmI() async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(const SnackBar(content: Text('Looking around…')));
+    Position position;
+    try {
+      position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium),
+      );
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('No position: $e')));
+      return;
+    }
+    final radius = searchRadius(position);
+    final stores = await nearbyStores(position, storeTypes.keys.toSet(), radius: 300);
+    if (!mounted) return;
+    messenger.hideCurrentSnackBar();
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Stores within 300 m'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              Text(
+                'Fix accuracy ±${position.accuracy.round()} m · '
+                'background check radius ${radius.round()} m',
+              ),
+              const SizedBox(height: 8),
+              if (stores == null)
+                const Text('Lookup failed: OpenStreetMap servers are busy. Try again in a minute.')
+              else if (stores.isEmpty)
+                const Text('No matching stores in OpenStreetMap here.'),
+              for (final s in stores ?? const <NearbyStore>[])
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Text(
+                    s.storeKeys.map((k) => storeTypes[k]!.emoji).join(),
+                    style: const TextStyle(fontSize: 20),
+                  ),
+                  title: Text(s.name),
+                  subtitle: Text(
+                    '${s.distance.round()} m${s.distance <= radius ? ' · would trigger' : ''}',
+                  ),
+                ),
+            ],
+          ),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
+      ),
+    );
+  }
+
+  Future<void> _pickThemeMode() async {
+    final picked = await showDialog<ThemeMode>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Theme'),
+        children: [
+          RadioGroup<ThemeMode>(
+            groupValue: themeModeNotifier.value,
+            onChanged: (m) => Navigator.pop(context, m),
+            child: Column(
+              children: [
+                for (final m in ThemeMode.values)
+                  RadioListTile<ThemeMode>(
+                    title: Text(themeModeLabel(m)),
+                    subtitle: m == ThemeMode.system ? const Text('Follow phone settings') : null,
+                    value: m,
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+    if (picked != null) await setThemeMode(picked);
   }
 
   Future<void> _pickPollPeriod() async {
@@ -139,6 +227,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           onChanged: null,
         ),
         const Divider(),
+        ValueListenableBuilder<ThemeMode>(
+          valueListenable: themeModeNotifier,
+          builder: (context, mode, _) => ListTile(
+            title: const Text('Theme'),
+            trailing: Text(themeModeLabel(mode)),
+            onTap: _pickThemeMode,
+          ),
+        ),
+        const Divider(),
         ValueListenableBuilder<Duration>(
           valueListenable: pollPeriodNotifier,
           builder: (context, period, _) => ListTile(
@@ -147,6 +244,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: _pickPollPeriod,
           ),
         ),
+        if (kDebugMode)
+          ListTile(
+            leading: const Icon(Icons.storefront_outlined),
+            title: const Text('Where am I? (debug)'),
+            subtitle: const Text('Test store detection here (OpenStreetMap)'),
+            onTap: _whereAmI,
+          ),
         const Divider(),
         if (FirebaseAuth.instance.currentUser?.isAnonymous == false)
           ListTile(
@@ -169,9 +273,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         FutureBuilder<PackageInfo>(
-          future: PackageInfo.fromPlatform(),
+          future: _packageInfo,
           builder: (context, snapshot) => Text(
-            'Version ${snapshot.data!.version}+${snapshot.data!.buildNumber}',
+            snapshot.hasData ? 'Version ${snapshot.data!.version}+${snapshot.data!.buildNumber}' : '',
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 12, color: Colors.grey),
           ),

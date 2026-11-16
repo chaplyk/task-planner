@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:siri_wave/siri_wave.dart';
 
 import '../collections.dart';
+import '../lists.dart';
 import '../llm/local_parser.dart';
 import '../models/reminder.dart';
 import '../permissions.dart';
@@ -14,7 +15,15 @@ import 'reminder_composer.dart';
 
 /// What the smart input hands to the screen when the user sends.
 class SmartDraft {
-  const SmartDraft({required this.text, this.reminder, this.ai, this.needsRefine = false, this.categoryManual = false});
+  const SmartDraft({
+    required this.text,
+    this.reminder,
+    this.ai,
+    this.needsRefine = false,
+    this.categoryManual = false,
+    this.listManual = false,
+    this.list,
+  });
 
   final String text;
 
@@ -29,6 +38,10 @@ class SmartDraft {
 
   /// The user picked the category by hand, so refinement must not change it.
   final bool categoryManual;
+
+  /// The user picked the list by hand ([list], null = Inbox); it wins over the AI's choice.
+  final bool listManual;
+  final String? list;
 }
 
 /// One input for everything: type or speak, triggers and category are suggested
@@ -68,7 +81,10 @@ class SmartInputState extends State<SmartInput> {
   final _controller = TextEditingController();
   final _focus = FocusNode();
   final _aiCache = <String, Reminder>{};
-  StreamSubscription<dynamic>? _placesSub, _categoriesSub;
+  StreamSubscription<dynamic>? _placesSub, _categoriesSub, _listsSub;
+  List<String> _lists = [];
+  bool _listChosen = false;
+  String? _manualList;
   List<String> _places = [];
   Map<String, String> _categories = {}; // name -> emoji
   Timer? _aiTimer;
@@ -86,6 +102,9 @@ class SmartInputState extends State<SmartInput> {
     _placesSub = locationsCollection().snapshots().listen((s) {
       setState(() => _places = [for (final d in s.docs) d.data()['name'] as String]);
     });
+    _listsSub = userListsStream().listen((docs) {
+      setState(() => _lists = [for (final d in docs) d.data()['name'] as String]);
+    });
     _categoriesSub = categoriesCollection().snapshots().listen((s) {
       setState(
         () => _categories = {for (final d in s.docs) d.data()['name'] as String: d.data()['emoji'] as String? ?? '🏷️'},
@@ -98,6 +117,7 @@ class SmartInputState extends State<SmartInput> {
     _aiTimer?.cancel();
     _placesSub?.cancel();
     _categoriesSub?.cancel();
+    _listsSub?.cancel();
     _controller.dispose();
     _focus.dispose();
     super.dispose();
@@ -171,6 +191,13 @@ class SmartInputState extends State<SmartInput> {
   bool get _categoryFromAi =>
       _manualCategory == null && _aiCache[_text]?.category == _category && _category != null;
 
+  /// The list the task goes to: the user's pick, else the AI's, else the Inbox (null).
+  String? get _list {
+    if (_listChosen) return _manualList;
+    final aiList = _aiCache[_text]?.list;
+    return _lists.contains(aiList) ? aiList : null;
+  }
+
   String? get _category {
     if (_manualCategory != null) return _manualCategory;
     final aiCat = _aiCache[_text]?.category;
@@ -185,6 +212,8 @@ class SmartInputState extends State<SmartInput> {
       _manualTrigger = null;
       _triggerCleared = false;
       _manualCategory = null;
+      _listChosen = false;
+      _manualList = null;
     }
     setState(() {});
     _aiTimer?.cancel();
@@ -218,6 +247,8 @@ class SmartInputState extends State<SmartInput> {
         text: text,
         needsRefine: ai == null,
         categoryManual: _manualCategory != null,
+        listManual: _listChosen,
+        list: _list,
         reminder: Reminder(
           summary: ai?.summary ?? cleanSummary(text, spans),
           when: when,
@@ -228,11 +259,12 @@ class SmartInputState extends State<SmartInput> {
           location: trigger.location,
           locationEvent: trigger.locationEvent,
           category: category ?? ai?.category ?? 'other',
+          list: _list,
           confidence: 1.0,
         ),
       );
     } else {
-      draft = SmartDraft(text: text, ai: ai);
+      draft = SmartDraft(text: text, ai: ai, listManual: _listChosen, list: _list);
     }
 
     _aiTimer?.cancel();
@@ -332,8 +364,7 @@ class SmartInputState extends State<SmartInput> {
               onSelectionChanged: (s) => setSheet(() => event = s.first),
             ),
             const SizedBox(height: 16),
-            Text('Any store', style: Theme.of(context).textTheme.labelLarge),
-            const SizedBox(height: 8),
+            const PlaceSectionHeader('Nearby stores'),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -347,8 +378,7 @@ class SmartInputState extends State<SmartInput> {
               ],
             ),
             const SizedBox(height: 16),
-            Text('My places', style: Theme.of(context).textTheme.labelLarge),
-            const SizedBox(height: 8),
+            const PlaceSectionHeader('My places'),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -379,6 +409,29 @@ class SmartInputState extends State<SmartInput> {
       location: place,
       locationEvent: event,
     );
+  }
+
+  Future<void> _pickList() async {
+    final picked = await _sheet<String>(
+      title: 'List',
+      builder: (context) => Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final name in [inboxName, ..._lists])
+            ChoiceChip(
+              label: Text(name),
+              selected: (_list ?? inboxName) == name,
+              onSelected: (_) => Navigator.pop(context, name),
+            ),
+        ],
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _listChosen = true;
+      _manualList = picked == inboxName ? null : picked;
+    });
   }
 
   Future<void> _pickCategory() async {
@@ -578,6 +631,17 @@ class SmartInputState extends State<SmartInput> {
             _triggerCleared = false;
           }),
         ),
+      InputChip(
+        avatar: const Icon(Icons.checklist_rounded, size: 18),
+        label: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_list ?? inboxName),
+            if (!_listChosen && _list != null) sourceBadge(SuggestionSource.ai),
+          ],
+        ),
+        onPressed: _pickList,
+      ),
       if (category != null)
         InputChip(
           avatar: Text(category == 'other' ? '📦' : _categories[category] ?? '🏷️'),

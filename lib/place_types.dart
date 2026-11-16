@@ -1,13 +1,14 @@
 // Kinds of stores a reminder can target without saving a specific place.
 // They are stored as ordinary place reminders whose `location` is the key
-// (e.g. 'grocery'); the background service detects them with Google Places.
+// (e.g. 'grocery'); the background service detects them with OpenStreetMap.
 
 class StoreType {
   const StoreType({
     required this.label,
     required this.emoji,
     required this.keywords,
-    required this.googleTypes,
+    required this.osmTags,
+    required this.aiHint,
   });
 
   /// "grocery store"
@@ -17,8 +18,15 @@ class StoreType {
   /// Words that identify this kind of store in what the user said.
   final List<String> keywords;
 
-  /// Google Places types that count as this kind of store.
-  final Set<String> googleTypes;
+  /// What the AI model should map to this type, e.g. "any supermarket or grocery shop".
+  final String aiHint;
+
+  /// OpenStreetMap tags (key -> values) that count as this kind of store.
+  final Map<String, List<String>> osmTags;
+
+  /// Whether an OpenStreetMap element with [tags] is this kind of store.
+  bool matches(Map<String, dynamic> tags) =>
+      osmTags.entries.any((e) => e.value.contains(tags[e.key]));
 }
 
 const storeTypes = <String, StoreType>{
@@ -26,19 +34,30 @@ const storeTypes = <String, StoreType>{
     label: 'grocery store',
     emoji: '🛒',
     keywords: ['grocery store', 'grocery', 'groceries', 'supermarket', 'food store', 'market'],
-    googleTypes: {'grocery_store', 'supermarket', 'convenience_store', 'food_store', 'market'},
+    // "convenience" covers small neighbourhood grocery shops in many countries.
+    osmTags: {
+      'shop': ['supermarket', 'greengrocer', 'convenience'],
+    },
+    aiHint: 'any supermarket, grocery or food shop, including store brands',
   ),
   'hardware': StoreType(
     label: 'hardware store',
     emoji: '🔧',
     keywords: ['hardware store', 'hardware', 'diy store', 'home improvement store', 'home improvement'],
-    googleTypes: {'hardware_store', 'home_improvement_store'},
+    osmTags: {
+      'shop': ['hardware', 'doityourself'],
+    },
+    aiHint: 'any hardware, DIY or home improvement store, including store brands',
   ),
   'pharmacy': StoreType(
     label: 'pharmacy',
     emoji: '💊',
     keywords: ['pharmacy', 'drugstore', 'drug store', 'chemist'],
-    googleTypes: {'pharmacy', 'drugstore'},
+    osmTags: {
+      'amenity': ['pharmacy'],
+      'shop': ['chemist'],
+    },
+    aiHint: 'any pharmacy or drugstore, including store brands',
   ),
 };
 

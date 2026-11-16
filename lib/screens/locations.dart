@@ -9,6 +9,7 @@ import 'package:network_info_plus/network_info_plus.dart';
 import '../collections.dart';
 import '../notifications.dart';
 import '../permissions.dart';
+import '../widgets/text_input_dialog.dart';
 
 const maxPlaces = 10;
 
@@ -72,28 +73,13 @@ Future<String?> addPlace(BuildContext context, {String? initialName}) async {
     return null;
   });
 
-  final controller = TextEditingController(text: initialName ?? '');
-  final name = await showDialog<String>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Name current location:'),
-      content: TextField(
-        controller: controller,
-        autofocus: true,
-        textCapitalization: TextCapitalization.sentences,
-        decoration: const InputDecoration(hintText: 'Location Name'),
-        onSubmitted: (value) => Navigator.pop(context, value.trim()),
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-        TextButton(
-          onPressed: () => Navigator.pop(context, controller.text.trim()),
-          child: const Text('Next'),
-        ),
-      ],
-    ),
+  final name = await showTextInputDialog(
+    context,
+    title: 'Name current location:',
+    action: 'Next',
+    initial: initialName ?? '',
+    hintText: 'Location Name',
   );
-  controller.dispose();
   if (name == null) return null;
   if (name.isEmpty) {
     snack('Name cannot be empty');
@@ -199,3 +185,4 @@ class LocationsScreen extends StatelessWidget {
     );
   }
 }
+
