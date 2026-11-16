@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -13,7 +13,7 @@ import '../activity_watch.dart';
 import '../collections.dart';
 import '../models/reminder.dart';
 import '../notifications.dart';
-import '../gemma/extractor.dart';
+import '../llm/extractor.dart';
 import '../widgets/typewriter.dart';
 
 class HomeScreen extends StatefulWidget {

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:animated_text_kit/animated_text_kit.dart';
 
 const examples = [

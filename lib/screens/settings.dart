@@ -1,12 +1,16 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:material_tag_editor/tag_editor.dart';
+import '../widgets/tag_input.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../activity_watch.dart';
 import '../collections.dart';
-import '../gemma/extractor.dart';
+import '../gemma/download.dart';
+import '../llm/extractor.dart';
+import '../llm/model_choice.dart';
 import 'locations.dart';
+import 'model.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -43,12 +47,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _pickPollPeriod() async {
+    final picked = await showDialog<Duration>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Poll period'),
+        children: [
+          RadioGroup<Duration>(
+            groupValue: pollPeriodNotifier.value,
+            onChanged: (d) => Navigator.pop(context, d),
+            child: Column(
+              children: [
+                for (final d in pollPeriods)
+                  RadioListTile<Duration>(title: Text(formatPollPeriod(d)), value: d),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+    if (picked != null) await setPollPeriod(picked);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
       children: [
+        ValueListenableBuilder<LlmModel>(
+          valueListenable: modelChoiceNotifier,
+          builder: (context, model, _) => ListTile(
+            title: const Text('Model'),
+            subtitle: ValueListenableBuilder<int?>(
+              valueListenable: localModelDownload,
+              builder: (context, percent, _) => Text(
+                percent == null ? modelLabel(model) : 'Downloading on-device model... $percent%',
+              ),
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const ModelScreen()),
+            ),
+          ),
+        ),
         const Divider(),
         const ListTile(
           title: Text('Categories'),
@@ -58,15 +101,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           stream: categoriesCollection().snapshots(),
           builder: (context, snapshot) {
             final docs = snapshot.data?.docs ?? [];
-            return TagEditor(
-              length: docs.length,
-              delimiters: const [',', ' '],
-              hasAddButton: true,
-              inputDecoration: const InputDecoration(
-                border: InputBorder.none,
-                hintText: 'Add Category...',
-              ),
-              onTagChanged: (newValue) {
+            return TagInput(
+              tags: [for (final doc in docs) doc['name'] as String],
+              hintText: 'Add Category...',
+              onAdd: (newValue) {
                 if (docs.length >= 5) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('You can only have up to 5 categories')),
@@ -90,13 +128,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 categoriesCollection().add({'name': newValue});
               },
-              tagBuilder: (context, index) => Chip(
-                label: Text(docs[index]['name']),
-                deleteIcon: const Icon(Icons.close, size: 18),
-                onDeleted: () {
-                  docs[index].reference.delete();
-                },
-              ),
+              onDelete: (index) => docs[index].reference.delete(),
             );
           },
         ),
@@ -116,10 +148,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           onChanged: null,
         ),
         const Divider(),
-        const ListTile(
-          title: Text('Poll period'),
-          trailing: Text('2 min'),
-          enabled: false,
+        ValueListenableBuilder<Duration>(
+          valueListenable: pollPeriodNotifier,
+          builder: (context, period, _) => ListTile(
+            title: const Text('Poll period'),
+            trailing: Text(formatPollPeriod(period)),
+            onTap: _pickPollPeriod,
+          ),
         ),
         const Divider(),
         SizedBox(height: 16),

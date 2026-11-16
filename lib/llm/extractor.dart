@@ -1,9 +1,14 @@
+import 'package:firebase_ai/firebase_ai.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 
-import '../models/reminder.dart';
 import '../collections.dart';
+import '../gemma/download.dart';
+import '../models/reminder.dart';
+import 'model_choice.dart';
+
+const _geminiModel = 'gemini-3.5-flash-lite';
 
 const _systemInstruction =
     'You convert reminders into JSON. Reply with JSON only, no explanations.';
@@ -12,14 +17,13 @@ final activeBackendNotifier = ValueNotifier<String>('not loaded');
 
 // Converts text into a JSON using LLM
 class ReminderExtractor {
-  InferenceModel? _model;
+  InferenceModel? _localModel;
+  GenerativeModel? _gemini;
   String categories = '';
   String locations = '';
 
   Future<Reminder?> extract(String transcript) async {
     if (transcript.trim().isEmpty) return null;
-
-    _model ??= await FlutterGemma.getActiveModel(maxTokens: 1024);
 
     final categoryDocs = await categoriesCollection().get();
     categories = categoryDocs.docs.map((doc) => doc['name'] as String).join(', ');
@@ -27,38 +31,76 @@ class ReminderExtractor {
     final locationDocs = await locationsCollection().get();
     locations = locationDocs.docs.map((doc) => doc['name'] as String).join(', ');
 
-    final session = await _model!.createSession(
+    final output = await _generate(_prompt(transcript));
+    debugPrint('Model output: $output');
+    final reminder = Reminder.tryParse(output, transcript: transcript);
+    if (reminder == null) {
+      await FirebaseCrashlytics.instance.recordError(
+        Exception('LLM extraction error'),
+        StackTrace.current,
+        reason: 'Reminder extraction failed',
+        information: [
+          'backend: ${activeBackendNotifier.value}',
+          'transcript: $transcript',
+          'model output: $output',
+        ],
+      );
+    }
+    return reminder;
+  }
+
+  Future<String> _generate(String prompt) async {
+    if (modelChoiceNotifier.value == LlmModel.local) {
+      if (await isLocalModelInstalled()) return _generateLocal(prompt);
+      debugPrint('Local model not installed yet, falling back to Gemini');
+    } else {
+      await _closeLocal();
+    }
+    return _generateGemini(prompt);
+  }
+
+  Future<String> _generateGemini(String prompt) async {
+    _gemini ??= FirebaseAI.googleAI().generativeModel(
+      model: _geminiModel,
+      systemInstruction: Content.system(_systemInstruction),
+      generationConfig: GenerationConfig(
+        temperature: 0.1,
+        maxOutputTokens: 1024,
+        responseMimeType: 'application/json',
+      ),
+    );
+    activeBackendNotifier.value = 'gemini';
+    debugPrint('Inference backend: gemini');
+    final response = await _gemini!.generateContent([Content.text(prompt)]);
+    return response.text ?? '';
+  }
+
+  Future<String> _generateLocal(String prompt) async {
+    _localModel ??= await FlutterGemma.getActiveModel(maxTokens: 1024);
+
+    final session = await _localModel!.createSession(
       temperature: 0.1,
       systemInstruction: _systemInstruction,
       maxOutputTokens: 256,
     );
-    
-    activeBackendNotifier.value = _model!.activeBackend!.name;
+
+    activeBackendNotifier.value = _localModel!.activeBackend!.name;
     debugPrint('Inference backend: ${activeBackendNotifier.value}');
-    
+
     try {
-      await session.addQueryChunk(Message(text: _prompt(transcript), isUser: true));
-      final output = await session.getResponse();
-      debugPrint('Model output: $output');
-      final reminder = Reminder.tryParse(output, transcript: transcript);
-      if (reminder == null) {
-        await FirebaseCrashlytics.instance.recordError(
-          Exception('LLM extraction error'),
-          StackTrace.current,
-          reason: 'Reminder extraction failed',
-          information: ['transcript: $transcript', 'model output: $output'],
-        );
-      }
-      return reminder;
+      await session.addQueryChunk(Message(text: prompt, isUser: true));
+      return await session.getResponse();
     } finally {
       await session.close();
     }
   }
 
-  Future<void> close() async {
-    await _model?.close();
-    _model = null;
+  Future<void> _closeLocal() async {
+    await _localModel?.close();
+    _localModel = null;
   }
+
+  Future<void> close() => _closeLocal();
 
   String _prompt(String transcript) =>
       'Extract the task from the reminder into '

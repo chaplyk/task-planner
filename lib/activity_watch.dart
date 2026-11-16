@@ -4,12 +4,47 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_activity_recognition/flutter_activity_recognition.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:network_info_plus/network_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'notifications.dart';
 import 'collections.dart';
 
-// Interval between activity checks
-const interval = 120 * 1000;
+const _pollPeriodKey = 'poll_period_seconds';
+
+// Selectable intervals between activity checks
+const pollPeriods = [
+  Duration(seconds: 30),
+  Duration(seconds: 45),
+  Duration(minutes: 1),
+  Duration(minutes: 2),
+  Duration(minutes: 5),
+  Duration(minutes: 10),
+];
+
+final pollPeriodNotifier = ValueNotifier<Duration>(const Duration(seconds: 45));
+
+Future<void> loadPollPeriod() async {
+  final prefs = await SharedPreferences.getInstance();
+  final seconds = prefs.getInt(_pollPeriodKey);
+  if (seconds != null) pollPeriodNotifier.value = Duration(seconds: seconds);
+}
+
+Future<void> setPollPeriod(Duration period) async {
+  pollPeriodNotifier.value = period;
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setInt(_pollPeriodKey, period.inSeconds);
+  if (await FlutterForegroundTask.isRunningService) {
+    await FlutterForegroundTask.updateService(foregroundTaskOptions: _taskOptions());
+  }
+}
+
+String formatPollPeriod(Duration d) =>
+    d.inSeconds < 60 ? '${d.inSeconds} s' : '${d.inMinutes} min';
+
+ForegroundTaskOptions _taskOptions() => ForegroundTaskOptions(
+      eventAction: ForegroundTaskEventAction.repeat(pollPeriodNotifier.value.inMilliseconds),
+      autoRunOnBoot: true,
+    );
 
 // The callback function should always be a top-level or static function.
 @pragma('vm:entry-point')
@@ -89,10 +124,7 @@ Future<void> startWatch() async {
       channelName: 'Reminders Watch',
     ),
     iosNotificationOptions: const IOSNotificationOptions(),
-    foregroundTaskOptions: ForegroundTaskOptions(
-      eventAction: ForegroundTaskEventAction.repeat(interval),
-      autoRunOnBoot: true,
-    ),
+    foregroundTaskOptions: _taskOptions(),
   );
 
   await FlutterForegroundTask.startService(
