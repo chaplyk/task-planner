@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'notifications.dart';
 import 'collections.dart';
+import 'store_detection.dart';
 
 const _pollPeriodKey = 'poll_period_seconds';
 
@@ -54,6 +55,7 @@ void startWatchCallback() {
 
 class _ActivityTaskHandler extends TaskHandler {
   ActivityType _activity = ActivityType.UNKNOWN;
+  final _stores = StoreReminderWatcher();
   String? _lastWifiName;
 
   @override
@@ -74,6 +76,7 @@ class _ActivityTaskHandler extends TaskHandler {
 
     debugPrint('Current activity: ${_activity.name}');
     _checkActivityReminders(_activity.name);
+    _stores.tick(timestamp).catchError((Object e) => debugPrint('Store check failed: $e'));
 
     final wifiName = await NetworkInfo().getWifiName();
     if (wifiName == _lastWifiName) return;

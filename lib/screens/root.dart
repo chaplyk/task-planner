@@ -1,10 +1,10 @@
 import 'package:material_ui/material_ui.dart';
 
 import 'home.dart';
-import 'reminders.dart';
+import 'lists_screen.dart';
 import 'settings.dart';
 
-// base screen with bottomNavigationBar
+// base screen with bottom navigation
 class RootScreen extends StatefulWidget {
   const RootScreen({super.key});
 
@@ -14,26 +14,37 @@ class RootScreen extends StatefulWidget {
 
 class _RootScreenState extends State<RootScreen> {
   int _currentIndex = 0;
-  final _screens = const [HomeScreen(), RemindersScreen(), SettingsScreen()];
+
+  void _select(int index) => setState(() => _currentIndex = index);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(index: _currentIndex, children: _screens),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home), 
-            label: 'Home'
+      body: IndexedStack(
+        index: _currentIndex,
+        children: [
+          HomeScreen(onSeeAll: () => _select(1)),
+          const ListsScreen(),
+          const SettingsScreen(),
+        ],
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentIndex,
+        onDestinationSelected: _select,
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Home',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.checklist),
-            label: 'Reminders',
+          NavigationDestination(
+            icon: Icon(Icons.checklist_outlined),
+            selectedIcon: Icon(Icons.checklist),
+            label: 'Lists',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
+          NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            selectedIcon: Icon(Icons.settings),
             label: 'Settings',
           ),
         ],

@@ -3,6 +3,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 enum LlmModel { gemini, local }
 
+const geminiModel = 'gemini-3.5-flash-lite';
+
 const _prefKey = 'llm_model';
 
 final modelChoiceNotifier = ValueNotifier<LlmModel>(LlmModel.gemini);

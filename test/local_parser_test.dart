@@ -1,0 +1,121 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:nagadai/llm/local_parser.dart';
+
+// Monday, 16 Nov 2026, 10:00
+final _now = DateTime(2026, 11, 16, 10);
+
+Suggestion? _trigger(String text, {List<String> places = const []}) {
+  final s = suggestTriggers(text, places: places, categories: const ['work', 'family'], now: _now);
+  return s.where((x) => x.isTrigger).firstOrNull;
+}
+
+void main() {
+  group('time', () {
+    test('tomorrow at 6 means 6 PM tomorrow', () {
+      final t = _trigger('call mom tomorrow at 6')!;
+      expect(t.kind, SuggestionKind.time);
+      expect(t.when, DateTime(2026, 11, 17, 18));
+    });
+
+    test('tomorrow morning', () {
+      expect(_trigger('do laundry tomorrow morning')!.when, DateTime(2026, 11, 17, 9));
+    });
+
+    test('tonight', () {
+      expect(_trigger('take out trash tonight')!.when, DateTime(2026, 11, 16, 20));
+    });
+
+    test('in 2 hours', () {
+      expect(_trigger('check the oven in 2 hours')!.when, DateTime(2026, 11, 16, 12));
+    });
+
+    test('at 9am rolls to tomorrow when passed', () {
+      expect(_trigger('standup at 9am')!.when, DateTime(2026, 11, 17, 9));
+    });
+
+    test('weekday means next occurrence', () {
+      expect(_trigger('pay rent on friday')!.when, DateTime(2026, 11, 20, 9));
+      expect(_trigger('gym monday at 7pm')!.when, DateTime(2026, 11, 23, 19));
+    });
+  });
+
+  group('activity', () {
+    test('next time I run', () {
+      final t = _trigger('stretch next time I run')!;
+      expect(t.kind, SuggestionKind.activity);
+      expect(t.activity, 'RUNNING');
+    });
+
+    test('driving', () {
+      expect(_trigger('buy dog food next time I am driving')!.activity, 'IN_VEHICLE');
+    });
+  });
+
+  group('location', () {
+    test('leave office is an exit', () {
+      final t = _trigger('buy milk when I leave office', places: ['office'])!;
+      expect(t.kind, SuggestionKind.location);
+      expect(t.location, 'office');
+      expect(t.locationEvent, 'exit');
+    });
+
+    test('get home is an enter', () {
+      final t = _trigger('pay bills when I get home', places: ['Home'])!;
+      expect(t.location, 'Home');
+      expect(t.locationEvent, 'enter');
+    });
+  });
+
+  group('store types', () {
+    test('supermarket means any grocery store', () {
+      final t = _trigger('buy milk at the supermarket')!;
+      expect(t.kind, SuggestionKind.location);
+      expect(t.location, 'grocery');
+      expect(t.condition, 'at the grocery store');
+    });
+
+    test('pharmacy and hardware', () {
+      expect(_trigger('pick up pills at the drugstore')!.location, 'pharmacy');
+      expect(_trigger('get screws in the hardware store')!.location, 'hardware');
+    });
+
+    test('a saved place wins over the store type', () {
+      expect(_trigger('buy apples at the market', places: ['Market'])!.location, 'Market');
+    });
+
+    test('store phrase is stripped from the summary', () {
+      const text = 'buy milk at the supermarket';
+      final s = suggestTriggers(text, now: _now);
+      expect(cleanSummary(text, s.expand((x) => x.spans)), 'Buy milk');
+    });
+  });
+
+  test('no trigger', () {
+    expect(_trigger('pay bills'), isNull);
+  });
+
+  test('category from name and synonym', () {
+    List<Suggestion> s(String t) => suggestTriggers(t, categories: const ['work', 'family'], now: _now);
+    expect(s('meeting notes for work').last.category, 'work');
+    expect(s('call mom').last.category, 'family');
+  });
+
+  group('cleanSummary', () {
+    String clean(String text, {List<String> places = const []}) {
+      final s = suggestTriggers(text, places: places, now: _now);
+      return cleanSummary(text, s.expand((x) => x.spans));
+    }
+
+    test('strips lead phrase and time', () {
+      expect(clean('Remind me to call mom tomorrow at 6'), 'Call mom');
+    });
+
+    test('strips activity phrase', () {
+      expect(clean('stretch next time I run'), 'Stretch');
+    });
+
+    test('strips place phrase', () {
+      expect(clean('buy milk when I leave office', places: ['office']), 'Buy milk');
+    });
+  });
+}

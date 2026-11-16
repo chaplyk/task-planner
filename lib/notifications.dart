@@ -40,3 +40,5 @@ Future<void> scheduleNotification(int id, String summary, DateTime when) async {
   );
   debugPrint('Scheduled "$summary" for $when');
 }
+
+Future<void> cancelNotification(int id) => AwesomeNotifications().cancel(id);

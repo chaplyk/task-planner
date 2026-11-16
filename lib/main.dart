@@ -11,6 +11,7 @@ import 'package:native_geofence/native_geofence.dart';
 
 import 'activity_watch.dart';
 import 'llm/model_choice.dart';
+import 'theme_choice.dart';
 import 'notifications.dart';
 import 'screens/onboarding.dart';
 import 'screens/startup.dart';
@@ -35,8 +36,9 @@ Future<void> main() async {
   await FlutterGemma.initialize(inferenceEngines: [LiteRtLmEngine()]);
   await loadModelChoice();
   await loadPollPeriod();
+  await loadThemeMode();
   await initNotifications();
-  await askNotificationPermission();
+  // Notification permission is asked after the first reminder, not at launch.
   await NativeGeofenceManager.instance.initialize();
   runApp(const MyApp());
 }
@@ -46,11 +48,40 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      theme: ThemeData(colorSchemeSeed: const Color.fromARGB(255, 53, 135, 203)),
-      home: const SplashScreen(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeModeNotifier,
+      builder: (context, mode, _) => MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: _theme(Brightness.light),
+        darkTheme: _theme(Brightness.dark),
+        themeMode: mode,
+        home: const SplashScreen(),
+      ),
     );
   }
+}
+
+const _brandCoral = Color(0xFFFE6D73);
+
+ThemeData _theme(Brightness brightness) {
+  // Fidelity keeps the primary close to the actual brand coral instead of a muted tone.
+  final scheme = ColorScheme.fromSeed(
+    seedColor: _brandCoral,
+    brightness: brightness,
+    dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
+  );
+  final base = ThemeData(colorScheme: scheme, useMaterial3: true);
+  final text = base.textTheme;
+  return base.copyWith(
+    textTheme: text.copyWith(
+      headlineLarge: text.headlineLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.8),
+      headlineMedium: text.headlineMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.6),
+      headlineSmall: text.headlineSmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -0.3),
+      titleLarge: text.titleLarge?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -0.2),
+    ),
+    snackBarTheme: const SnackBarThemeData(behavior: SnackBarBehavior.floating),
+    chipTheme: base.chipTheme.copyWith(shape: const StadiumBorder()),
+  );
 }
 
 class SplashScreen extends StatelessWidget {
