@@ -1,7 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import '../widgets/tag_input.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../activity_watch.dart';
@@ -9,6 +8,7 @@ import '../collections.dart';
 import '../gemma/download.dart';
 import '../llm/extractor.dart';
 import '../llm/model_choice.dart';
+import 'categories.dart';
 import 'locations.dart';
 import 'model.dart';
 
@@ -44,6 +44,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (confirmed == true) {
       await FirebaseAuth.instance.currentUser!.delete();
       await GoogleSignIn.instance.signOut();
+    }
+  }
+
+  Future<void> _signOut() async {
+    try {
+      await GoogleSignIn.instance.signOut();
+      await FirebaseAuth.instance.signOut();
+    } catch (e) {
+      debugPrint('Sign out failed: $e');
     }
   }
 
@@ -93,45 +102,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         const Divider(),
-        const ListTile(
-          title: Text('Categories'),
-        ),
-        Padding(padding: const EdgeInsets.all(5), child:
         StreamBuilder(
           stream: categoriesCollection().snapshots(),
           builder: (context, snapshot) {
             final docs = snapshot.data?.docs ?? [];
-            return TagInput(
-              tags: [for (final doc in docs) doc['name'] as String],
-              hintText: 'Add Category...',
-              onAdd: (newValue) {
-                if (docs.length >= 5) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('You can only have up to 5 categories')),
-                  );
-                  return;
-                }
-
-                bool categoryExists = false;
-                for (var doc in docs) {
-                  if (doc['name'] == newValue) {
-                    categoryExists = true;
-                    break;
-                  }
-                }
-                if (newValue == "other" || categoryExists) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('This category already exists')),
-                  );
-                  return;
-                }
-
-                categoriesCollection().add({'name': newValue});
-              },
-              onDelete: (index) => docs[index].reference.delete(),
+            final preview = docs
+                .map((d) => '${d.data()['emoji'] ?? ''} ${d['name']}'.trim())
+                .join(' · ');
+            return ListTile(
+              title: const Text('Categories'),
+              subtitle: Text(
+                preview.isEmpty ? 'No categories yet' : preview,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const CategoriesScreen()),
+              ),
             );
           },
-        ),
         ),
         const Divider(),
         ListTile(
@@ -157,6 +148,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         const Divider(),
+        if (FirebaseAuth.instance.currentUser?.isAnonymous == false)
+          ListTile(
+            leading: const Icon(Icons.logout),
+            title: const Text('Sign out'),
+            onTap: _signOut,
+          ),
         SizedBox(height: 16),
         TextButton(
           onPressed: _deleteAccount,

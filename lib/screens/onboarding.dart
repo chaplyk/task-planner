@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../collections.dart';
+import 'categories.dart';
 import '../widgets/typewriter.dart';
 
 const _pageColors = [
@@ -31,7 +32,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       await FirebaseAuth.instance.signInWithCredential(
         GoogleAuthProvider.credential(idToken: account.authentication.idToken),
       );
-      await categoriesCollection().add({'name': 'personal'}); // add safeguard later
+      await categoriesCollection().add({'name': 'personal', 'emoji': '🧑', 'color': randomCategoryColor()}); // add safeguard later
       await FirebaseAnalytics.instance.logEvent(name: 'login', parameters: {'method': 'google'});
     } catch (e) {
       FirebaseCrashlytics.instance.recordError(e, StackTrace.current, reason: 'Google Sign In failed');
@@ -42,7 +43,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _continueAsGuest() async {
     try {
       await FirebaseAuth.instance.signInAnonymously();
-      await categoriesCollection().add({'name': 'personal'}); // add safeguard later
+      await categoriesCollection().add({'name': 'personal', 'emoji': '🧑', 'color': randomCategoryColor()}); // add safeguard later
       await FirebaseAnalytics.instance.logEvent(name: 'login', parameters: {'method': 'anonymous'});
     } catch (e) {
       FirebaseCrashlytics.instance.recordError(e, StackTrace.current, reason: 'Anonymous Sign In failed');

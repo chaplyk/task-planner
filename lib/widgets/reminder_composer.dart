@@ -1,0 +1,399 @@
+import 'package:material_ui/material_ui.dart';
+
+import '../collections.dart';
+import '../models/reminder.dart';
+import '../permissions.dart';
+import '../place_types.dart';
+import '../screens/locations.dart';
+
+enum _Trigger { time, activity, location, none }
+
+const _activityLabels = {
+  'IN_VEHICLE': ('🚗', 'Driving', 'next time I drive'),
+  'ON_BICYCLE': ('🚲', 'Cycling', 'next time I cycle'),
+  'RUNNING': ('🏃', 'Running', 'next time I run'),
+  'WALKING': ('🚶', 'Walking', 'next time I walk'),
+};
+
+/// "Today at 6:00 PM", "Tomorrow at 9:00 AM", "Mar 3, 2027 at 8:00 AM".
+String formatReminderWhen(BuildContext context, DateTime when) {
+  final l10n = MaterialLocalizations.of(context);
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final day = DateTime(when.year, when.month, when.day);
+  final time = l10n.formatTimeOfDay(TimeOfDay.fromDateTime(when));
+  final dayLabel = switch (day.difference(today).inDays) {
+    0 => 'Today',
+    1 => 'Tomorrow',
+    _ => l10n.formatMediumDate(when),
+  };
+  return '$dayLabel at $time';
+}
+
+/// Date picker followed by a time picker. Returns null if either is dismissed.
+Future<DateTime?> pickReminderDateTime(BuildContext context, DateTime? current) async {
+  final now = DateTime.now();
+  final initial = current ?? now.add(const Duration(hours: 1));
+  final date = await showDatePicker(
+    context: context,
+    initialDate: initial.isBefore(now) ? now : initial,
+    firstDate: DateTime(now.year, now.month, now.day),
+    lastDate: now.add(const Duration(days: 365 * 2)),
+  );
+  if (date == null || !context.mounted) return null;
+  final time = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(initial));
+  if (time == null) return null;
+  return DateTime(date.year, date.month, date.day, time.hour, time.minute);
+}
+
+/// Opens a bottom sheet to create or edit a reminder by touch.
+/// Returns the reminder, or null if the user dismissed the sheet.
+Future<Reminder?> showReminderComposer(
+  BuildContext context, {
+  Reminder? initial,
+  String title = 'New reminder',
+}) {
+  return showModalBottomSheet<Reminder>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    useSafeArea: true,
+    builder: (context) => _Composer(initial: initial, title: title),
+  );
+}
+
+class _Composer extends StatefulWidget {
+  const _Composer({this.initial, required this.title});
+
+  final Reminder? initial;
+  final String title;
+
+  @override
+  State<_Composer> createState() => _ComposerState();
+}
+
+class _ComposerState extends State<_Composer> {
+  late final _summary = TextEditingController(text: widget.initial?.summary ?? '');
+  late _Trigger _trigger = switch (widget.initial?.triggerType) {
+    'activity' => _Trigger.activity,
+    'location' => _Trigger.location,
+    'none' => _Trigger.none,
+    _ => widget.initial?.when != null || widget.initial == null ? _Trigger.time : _Trigger.none,
+  };
+  late DateTime? _when = widget.initial?.when;
+  late String? _activity = widget.initial?.activity;
+  late String? _location = widget.initial?.location;
+  late String _locationEvent = widget.initial?.locationEvent ?? 'enter';
+  late String? _category = widget.initial?.category;
+
+  @override
+  void initState() {
+    super.initState();
+    _summary.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _summary.dispose();
+    super.dispose();
+  }
+
+  bool get _valid {
+    if (_summary.text.trim().isEmpty) return false;
+    return switch (_trigger) {
+      _Trigger.time => _when != null,
+      _Trigger.activity => _activity != null,
+      _Trigger.location => _location != null,
+      _Trigger.none => true,
+    };
+  }
+
+  String _formatWhen(DateTime when) => formatReminderWhen(context, when);
+
+  String? _condition() => switch (_trigger) {
+        _Trigger.time => _formatWhen(_when!),
+        _Trigger.activity => _activityLabels[_activity]!.$3,
+        _Trigger.location => isStoreType(_location)
+            ? storeCondition(_location!, _locationEvent)
+            : _locationEvent == 'enter'
+            ? 'when I arrive at $_location'
+            : 'when I leave $_location',
+        _Trigger.none => null,
+      };
+
+  void _save() {
+    Navigator.pop(
+      context,
+      Reminder(
+        summary: _summary.text.trim(),
+        when: _trigger == _Trigger.time ? _when : null,
+        condition: _condition(),
+        transcript: widget.initial?.transcript,
+        triggerType: _trigger.name,
+        activity: _trigger == _Trigger.activity ? _activity : null,
+        location: _trigger == _Trigger.location ? _location : null,
+        locationEvent: _trigger == _Trigger.location ? _locationEvent : null,
+        category: _category ?? 'other',
+        confidence: 1.0,
+      ),
+    );
+  }
+
+  Future<void> _pickDateTime() async {
+    final picked = await pickReminderDateTime(context, _when);
+    if (picked != null && mounted) setState(() => _when = picked);
+  }
+
+  Future<void> _selectTrigger(_Trigger trigger) async {
+    setState(() => _trigger = trigger);
+    if (trigger == _Trigger.activity) await ensureActivityPermission(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(widget.title, style: theme.textTheme.headlineSmall),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _summary,
+              autofocus: widget.initial == null,
+              textCapitalization: TextCapitalization.sentences,
+              style: theme.textTheme.titleMedium,
+              decoration: InputDecoration(
+                hintText: 'What should I remind you about?',
+                filled: true,
+                fillColor: theme.colorScheme.surfaceContainerHighest,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            _Label('When should I remind you?'),
+            SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<_Trigger>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(value: _Trigger.time, label: Text('⏰ Time')),
+                  ButtonSegment(value: _Trigger.activity, label: Text('🏃 Activity')),
+                  ButtonSegment(value: _Trigger.location, label: Text('📍 Place')),
+                  ButtonSegment(value: _Trigger.none, label: Text('Anytime')),
+                ],
+                selected: {_trigger},
+                onSelectionChanged: (s) => _selectTrigger(s.first),
+              ),
+            ),
+            const SizedBox(height: 12),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 200),
+              alignment: Alignment.topCenter,
+              child: switch (_trigger) {
+                _Trigger.time => _timeOptions(),
+                _Trigger.activity => _activityOptions(),
+                _Trigger.location => _locationOptions(),
+                _Trigger.none => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                      'No alert — it just stays on your list.',
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                  ),
+              },
+            ),
+            const SizedBox(height: 24),
+            _Label('Category'),
+            _categoryOptions(),
+            const SizedBox(height: 28),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _valid ? _save : null,
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  textStyle: theme.textTheme.titleMedium,
+                ),
+                child: const Text('Save reminder'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _timeOptions() {
+    final now = DateTime.now();
+    final tonight = DateTime(now.year, now.month, now.day, 20);
+    final tomorrow = DateTime(now.year, now.month, now.day + 1, 9);
+    final quick = <(String, DateTime)>[
+      ('In 1 hour', now.add(const Duration(hours: 1))),
+      if (tonight.isAfter(now)) ('Tonight 8 PM', tonight),
+      ('Tomorrow 9 AM', tomorrow),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final (label, time) in quick)
+              ChoiceChip(
+                label: Text(label),
+                selected: _when != null && _when!.difference(time).inMinutes.abs() < 1,
+                onSelected: (_) => setState(() => _when = time),
+              ),
+            ActionChip(
+              avatar: const Icon(Icons.calendar_month, size: 18),
+              label: const Text('Pick…'),
+              onPressed: _pickDateTime,
+            ),
+          ],
+        ),
+        if (_when != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Text(
+              '🔔 ${_formatWhen(_when!)}',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _activityOptions() {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final a in activities)
+          ChoiceChip(
+            label: Text('${_activityLabels[a]!.$1} ${_activityLabels[a]!.$2}'),
+            selected: _activity == a,
+            onSelected: (_) => setState(() => _activity = a),
+          ),
+      ],
+    );
+  }
+
+  Widget _locationOptions() {
+    final labelStyle = Theme.of(context).textTheme.labelLarge;
+    return StreamBuilder(
+      stream: locationsCollection().snapshots(),
+      builder: (context, snapshot) {
+        final names = [
+          for (final d in snapshot.data?.docs ?? const []) d.data()['name'] as String,
+        ];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Any store', style: labelStyle),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final MapEntry(:key, :value) in storeTypes.entries)
+                  ChoiceChip(
+                    label: Text('${value.emoji} ${value.label}'),
+                    selected: _location == key,
+                    onSelected: (_) => setState(() => _location = key),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text('My places', style: labelStyle),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final name in names)
+                  ChoiceChip(
+                    label: Text(name),
+                    selected: _location == name,
+                    onSelected: (_) => setState(() => _location = name),
+                  ),
+                ActionChip(
+                  avatar: const Icon(Icons.add_location_alt_outlined, size: 18),
+                  label: const Text('Add a place'),
+                  onPressed: () async {
+                    final name = await addPlace(context);
+                    if (name != null && mounted) setState(() => _location = name);
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SegmentedButton<String>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(value: 'enter', label: Text('When I arrive')),
+                ButtonSegment(value: 'exit', label: Text('When I leave')),
+              ],
+              selected: {_locationEvent},
+              onSelectionChanged: (s) => setState(() => _locationEvent = s.first),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _categoryOptions() {
+    return StreamBuilder(
+      stream: categoriesCollection().snapshots(),
+      builder: (context, snapshot) {
+        final cats = [
+          for (final d in snapshot.data?.docs ?? const [])
+            (d.data()['name'] as String, d.data()['emoji'] as String? ?? '🏷️'),
+          ('other', '📦'),
+        ];
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final (name, emoji) in cats)
+              ChoiceChip(
+                label: Text('$emoji $name'),
+                selected: (_category ?? 'other') == name,
+                onSelected: (_) => setState(() => _category = name),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _Label extends StatelessWidget {
+  const _Label(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Text(
+        text,
+        style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+      ),
+    );
+  }
+}

@@ -8,8 +8,6 @@ import '../gemma/download.dart';
 import '../models/reminder.dart';
 import 'model_choice.dart';
 
-const _geminiModel = 'gemini-3.5-flash-lite';
-
 const _systemInstruction =
     'You convert reminders into JSON. Reply with JSON only, no explanations.';
 
@@ -61,7 +59,7 @@ class ReminderExtractor {
 
   Future<String> _generateGemini(String prompt) async {
     _gemini ??= FirebaseAI.googleAI().generativeModel(
-      model: _geminiModel,
+      model: geminiModel,
       systemInstruction: Content.system(_systemInstruction),
       generationConfig: GenerationConfig(
         temperature: 0.1,
@@ -118,7 +116,10 @@ class ReminderExtractor {
       'Do not assume IN_VEHICLE unless user explicitly mentions driving or a car. '
       'Use null if no activity fits.\n'
 
-      'The "location" is one of $locations if user mentions it or null. '
+      'The "location" is the place the user mentions. '
+      'If it matches one of the saved places ($locations), use that exact name. '
+      'Otherwise use the place name as the user said it, for example "gym". '
+      'Use null if no place is mentioned. '
 
       'The "locationEvent" can be "enter" or "exit". '
       'Use null if the reminder is not tied to a location.\n'

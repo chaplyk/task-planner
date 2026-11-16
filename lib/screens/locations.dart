@@ -10,6 +10,8 @@ import '../collections.dart';
 import '../notifications.dart';
 import '../permissions.dart';
 
+const maxPlaces = 10;
+
 @pragma('vm:entry-point')
 Future<void> geofenceTriggered(GeofenceCallbackParams params) async {
   debugPrint('Geofence triggered with params: $params');
@@ -42,144 +44,121 @@ Future<void> geofenceTriggered(GeofenceCallbackParams params) async {
   }
 }
 
-class LocationsScreen extends StatefulWidget {
-  const LocationsScreen({super.key});
+/// Saves the user's current position (GPS geofence) or Wi-Fi network as a named place.
+/// [initialName] pre-fills the name, e.g. a place mentioned in a reminder.
+/// Returns the saved name, or null if the user cancelled.
+Future<String?> addPlace(BuildContext context, {String? initialName}) async {
+  void snack(String text) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
 
-  @override
-  State<LocationsScreen> createState() => _LocationsScreenState();
+  final count = (await locationsCollection().count().get()).count ?? 0;
+  if (count >= maxPlaces) {
+    snack('You can only have up to $maxPlaces locations');
+    return null;
+  }
+
+  await requestBackgroundLocationPermission(context);
+  if (!context.mounted) return null;
+
+  // Fetch while the user types the name.
+  final positionFuture = Geolocator.getCurrentPosition()
+      .then<Position?>((p) => p)
+      .catchError((Object e) {
+    debugPrint('Position unavailable: $e');
+    return null;
+  });
+  final wifiFuture = NetworkInfo().getWifiName().catchError((Object e) {
+    debugPrint('Wi-Fi name unavailable: $e');
+    return null;
+  });
+
+  final controller = TextEditingController(text: initialName ?? '');
+  final name = await showDialog<String>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Name current location:'),
+      content: TextField(
+        controller: controller,
+        autofocus: true,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: const InputDecoration(hintText: 'Location Name'),
+        onSubmitted: (value) => Navigator.pop(context, value.trim()),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () => Navigator.pop(context, controller.text.trim()),
+          child: const Text('Next'),
+        ),
+      ],
+    ),
+  );
+  controller.dispose();
+  if (name == null) return null;
+  if (name.isEmpty) {
+    snack('Name cannot be empty');
+    return null;
+  }
+
+  final position = await positionFuture;
+  final wifi = await wifiFuture;
+  if (!context.mounted) return null;
+
+  final type = await showDialog<String>(
+    context: context,
+    builder: (context) => SimpleDialog(
+      title: const Text('Choose Location Type'),
+      children: [
+        SimpleDialogOption(
+          onPressed: position == null ? null : () => Navigator.pop(context, 'gps'),
+          child: ListTile(
+            enabled: position != null,
+            leading: const Icon(Icons.location_on),
+            title: const Text('GPS Position'),
+            subtitle: Text(
+              position == null ? 'Unavailable' : '${position.latitude}, ${position.longitude}',
+            ),
+          ),
+        ),
+        SimpleDialogOption(
+          onPressed: wifi == null ? null : () => Navigator.pop(context, 'wifi'),
+          child: ListTile(
+            enabled: wifi != null,
+            leading: const Icon(Icons.wifi),
+            title: const Text('WiFi Network'),
+            subtitle: Text(wifi ?? 'Not connected'),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  if (type == 'wifi' && wifi != null) {
+    await locationsCollection().add({'name': name, 'wifi': wifi});
+    return name;
+  }
+  if (type == 'gps' && position != null) {
+    final doc = await locationsCollection().add({
+      'name': name,
+      'latitude': position.latitude,
+      'longitude': position.longitude,
+    });
+    final zone = Geofence(
+      id: doc.id,
+      location: Location(latitude: position.latitude, longitude: position.longitude),
+      radiusMeters: 75, // minimum recommended minimum 100-150, will adjust later
+      triggers: {GeofenceEvent.enter, GeofenceEvent.exit},
+      iosSettings: IosGeofenceSettings(),
+      androidSettings: AndroidGeofenceSettings(initialTriggers: {}),
+    );
+    await NativeGeofenceManager.instance.createGeofence(zone, geofenceTriggered);
+    return name;
+  }
+  return null;
 }
 
-class _LocationsScreenState extends State<LocationsScreen> {
-  Position? _position;
-  String? _wifiName;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchPosition();
-    _fetchWifiName();
-  }
-
-  Future<void> _fetchWifiName() async {
-    _wifiName = await NetworkInfo().getWifiName();
-  }
-
-  Future<void> _fetchPosition() async {
-    await requestBackgroundLocationPermission(context);
-    _position = await Geolocator.getCurrentPosition();
-  }
-
-  Future<void> _addLocation(BuildContext context) async {
-    final existingLocations = await locationsCollection().count().get();
-    final existingLocationsCount = existingLocations.count ?? 0;
-    if (existingLocationsCount >= 10) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You can only have up to 10 locations')),
-      );
-      return;
-    }
-
-    final controller = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Name current location:'),
-        content: TextField(controller: controller, decoration: const InputDecoration(hintText: 'Location Name')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('Next'),
-          ),
-        ],
-      ),
-    );
-
-    if (name == null || name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Name cannot be empty')),
-      );
-      return;
-    }
-
-    await showDialog<String>(
-      context: context,
-      builder: (context) => SimpleDialog(
-        title: const Text('Choose Location Type'),
-        children: [
-          SimpleDialogOption(
-            onPressed: () => _addCurrentGpsLocation(context, name),
-            child: ListTile(
-              leading: Icon(Icons.location_on),
-              title: Text('GPS Position'),
-              subtitle: Text('${_position!.latitude}, ${_position!.longitude}'),
-            ),
-          ),
-          SimpleDialogOption(
-            onPressed: () => _addCurrentWifiLocation(context, name),
-            child: ListTile(
-              leading: const Icon(Icons.wifi),
-              title: const Text('WiFi Network'),
-              subtitle: Text(_wifiName ?? 'Not connected'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _addCurrentWifiLocation(BuildContext context, String? name) async {
-    if (_wifiName == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to get current WiFi network')),
-      );
-      return;
-    }
-    Navigator.pop(context);
-    if (name != null) {
-      await locationsCollection().add({
-        'name': name,
-        'wifi': _wifiName,
-      });
-    }
-  }
-
-  Future<void> _addCurrentGpsLocation(BuildContext context, String? name) async {
-    if (_position == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to get current GPS position')),
-      );
-      return;
-    }
-    Navigator.pop(context);
-    if (name != null) {
-      final double latitude = _position!.latitude;
-      final double longitude = _position!.longitude;
-
-      final doc = await locationsCollection().add({
-        'name': name,
-        'latitude': latitude,
-        'longitude': longitude,
-      });
-
-      final zone = Geofence(
-        id: doc.id,
-        location: Location(
-          latitude: latitude,
-          longitude: longitude,
-        ),
-        radiusMeters: 75, // minimum recommended minimum 100-150, will adjust later
-        triggers: {
-          GeofenceEvent.enter,
-          GeofenceEvent.exit,
-        },
-        iosSettings: IosGeofenceSettings(),
-        androidSettings: AndroidGeofenceSettings(
-          initialTriggers: {},
-        ),
-      );
-      await NativeGeofenceManager.instance.createGeofence(zone, geofenceTriggered);
-    }
-  }
+class LocationsScreen extends StatelessWidget {
+  const LocationsScreen({super.key});
 
   Future<void> _deleteLocation(DocumentReference doc) async {
     await NativeGeofenceManager.instance.removeGeofenceById(doc.id); // TO ADD: do not remove for wifi location
@@ -189,10 +168,12 @@ class _LocationsScreenState extends State<LocationsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Saved Locations'),
-              actions: [
-          IconButton(onPressed: () => _addLocation(context), icon: const Icon(Icons.add)),
-        ],),
+      appBar: AppBar(
+        title: const Text('Saved Locations'),
+        actions: [
+          IconButton(onPressed: () => addPlace(context), icon: const Icon(Icons.add)),
+        ],
+      ),
       body: StreamBuilder(
         stream: locationsCollection().snapshots(),
         builder: (context, snapshot) {
@@ -200,17 +181,17 @@ class _LocationsScreenState extends State<LocationsScreen> {
           return ListView(
             children: [
               ...docs.map(
-                  (doc) => ListTile(
-                    title: Text(doc.data()['name']),
-                    subtitle: Text(
-                      doc.data()['wifi'] ?? '${doc.data()['latitude']}, ${doc.data()['longitude']}',
-                    ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete),
-                      onPressed: () => _deleteLocation(doc.reference),
-                    ),
+                (doc) => ListTile(
+                  title: Text(doc.data()['name']),
+                  subtitle: Text(
+                    doc.data()['wifi'] ?? '${doc.data()['latitude']}, ${doc.data()['longitude']}',
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete),
+                    onPressed: () => _deleteLocation(doc.reference),
                   ),
                 ),
+              ),
             ],
           );
         },

@@ -2,7 +2,6 @@ import 'package:material_ui/material_ui.dart';
 
 import '../gemma/download.dart';
 import '../llm/model_choice.dart';
-import '../permissions.dart';
 import 'root.dart';
 
 class StartupScreen extends StatefulWidget {
@@ -16,7 +15,7 @@ class _StartupScreenState extends State<StartupScreen> {
   @override
   void initState() {
     super.initState();
-    requestBackgroundLocationPermission(context);
+    // Location permission is requested when the user adds a place, not at launch.
     // Resume an interrupted local model download in the background.
     if (modelChoiceNotifier.value == LlmModel.local) {
       ensureLocalModel().catchError((e) => debugPrint('Model download failed: $e'));
