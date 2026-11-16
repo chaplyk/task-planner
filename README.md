@@ -12,9 +12,7 @@ To get to the app, your email needs to be added to the list of testers. Email me
 
 [![Play Store Internal Testing](https://img.shields.io/badge/Google%20Play-Internal%20Testing-414141?logo=googleplay&logoColor=white&style=for-the-badge)](https://play.google.com/apps/internaltest/4701638909643361559)
 
-
 ## Screenshots
-
 
 | Login | Home | Settings | Locations |
 |---|---|---|---|

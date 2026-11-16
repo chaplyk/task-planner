@@ -4,7 +4,8 @@ import 'package:flutter_gemma_litertlm/flutter_gemma_litertlm.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:nagadai/gemma/download.dart';
-import 'package:nagadai/gemma/extractor.dart';
+import 'package:nagadai/llm/extractor.dart';
+import 'package:nagadai/llm/model_choice.dart';
 
 const _transcript =
     "Remind me to buy a milk tomorrow afternoon because I will be baking a cake "
@@ -13,16 +14,28 @@ const _transcript =
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  test('extracts a reminder', timeout: Timeout.none, () async {
-    await FlutterGemma.initialize(inferenceEngines: [LiteRtLmEngine()]);
-    await downloadModel();
-
+  Future<void> runExtraction() async {
     final reminder = await ReminderExtractor().extract(_transcript);
 
+    debugPrint('backend: ${activeBackendNotifier.value}');
     debugPrint('summary: ${reminder?.summary}');
     debugPrint('when: ${reminder?.when}');
     debugPrint('when_string: ${reminder?.condition}');
 
     expect(reminder, isNotNull);
+  }
+
+  test('extracts a reminder with Gemini', timeout: Timeout.none, () async {
+    modelChoiceNotifier.value = LlmModel.gemini;
+    await runExtraction();
+    expect(activeBackendNotifier.value, 'gemini');
+  });
+
+  test('extracts a reminder with local model', timeout: Timeout.none, () async {
+    await FlutterGemma.initialize(inferenceEngines: [LiteRtLmEngine()]);
+    await downloadModel();
+    modelChoiceNotifier.value = LlmModel.local;
+    await runExtraction();
+    expect(activeBackendNotifier.value, isNot('gemini'));
   });
 }

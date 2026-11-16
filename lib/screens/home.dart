@@ -13,7 +13,7 @@ import '../activity_watch.dart';
 import '../collections.dart';
 import '../models/reminder.dart';
 import '../notifications.dart';
-import '../gemma/extractor.dart';
+import '../llm/extractor.dart';
 import '../widgets/typewriter.dart';
 
 class HomeScreen extends StatefulWidget {

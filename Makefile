@@ -1,4 +1,7 @@
-.PHONY: bump_build build run
+.PHONY: bump build build-release run
+
+# Local, gitignored dart defines (e.g. APP_CHECK_DEBUG_TOKEN for debug builds)
+DART_DEFINES := $(if $(wildcard dart_defines.json),--dart-define-from-file=dart_defines.json)
 
 bump:
 	@cur=$$(grep 'version:' pubspec.yaml | cut -d '+' -f2); \
@@ -13,4 +16,4 @@ build-release: bump
 	flutter build appbundle --release
 
 run: bump
-	flutter run
+	flutter run $(DART_DEFINES)
