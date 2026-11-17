@@ -873,11 +873,8 @@ class _MicButtonState extends State<_MicButton> with SingleTickerProviderStateMi
                       height: _size,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: recording ? [scheme.error, scheme.tertiary] : [scheme.primary, scheme.tertiary],
-                        ),
+                        // Solid, with the matching "on" colour for the icon: readable in light and dark.
+                        color: recording ? scheme.error : scheme.primary,
                         boxShadow: [
                           BoxShadow(
                             color: (recording ? scheme.error : scheme.primary).withValues(alpha: 0.30 + breathe * 0.25),
@@ -886,7 +883,11 @@ class _MicButtonState extends State<_MicButton> with SingleTickerProviderStateMi
                           ),
                         ],
                       ),
-                      child: Icon(recording ? Icons.stop_rounded : Icons.mic_rounded, color: Colors.white, size: 28),
+                      child: Icon(
+                        recording ? Icons.stop_rounded : Icons.mic_rounded,
+                        color: recording ? scheme.onError : scheme.onPrimary,
+                        size: 28,
+                      ),
                     ),
                   ),
                 ],

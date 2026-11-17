@@ -110,13 +110,31 @@ class MyApp extends StatelessWidget {
 
 const _brandBlue = Color(0xFFA2D2FF);
 
+/// The second accent (gradients, celebrations, routine holds). Generated from the brand
+/// blue it comes out bronze/gold; a lavender keeps the palette cool.
+const _accentLavender = Color(0xFFB8B0FF);
+
 ThemeData _theme(Brightness brightness) {
   // Fidelity keeps the brand light blue itself as the container colour (chips, highlights,
   // tile circles), with a deeper blue of the same hue as primary so text on it stays readable.
+  final accent = ColorScheme.fromSeed(
+    seedColor: _accentLavender,
+    brightness: brightness,
+    dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
+  );
   final scheme = ColorScheme.fromSeed(
     seedColor: _brandBlue,
     brightness: brightness,
     dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
+  ).copyWith(
+    tertiary: accent.primary,
+    onTertiary: accent.onPrimary,
+    tertiaryContainer: accent.primaryContainer,
+    onTertiaryContainer: accent.onPrimaryContainer,
+    tertiaryFixed: accent.primaryFixed,
+    tertiaryFixedDim: accent.primaryFixedDim,
+    onTertiaryFixed: accent.onPrimaryFixed,
+    onTertiaryFixedVariant: accent.onPrimaryFixedVariant,
   );
   final base = ThemeData(colorScheme: scheme, useMaterial3: true);
   final text = base.textTheme;
