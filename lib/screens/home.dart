@@ -10,6 +10,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../activity_watch.dart';
 import '../collections.dart';
+import '../llm/emoji.dart';
 import '../llm/extractor.dart';
 import '../llm/model_choice.dart';
 import '../models/reminder.dart';
@@ -19,12 +20,14 @@ import '../place_types.dart';
 import '../models/recurrence.dart';
 import '../recurring_repo.dart';
 import '../reminders_repo.dart';
+import '../store_detection.dart';
 import '../widgets/celebration.dart';
 import 'locations.dart';
 import 'routines.dart';
 import '../widgets/quick_check_sheet.dart';
 import '../widgets/reminder_composer.dart';
 import '../widgets/reminder_tile.dart';
+import '../widgets/routine_history_sheet.dart';
 import '../widgets/smart_input.dart';
 import '../widgets/typewriter.dart';
 
@@ -93,20 +96,16 @@ class _HomeScreenState extends State<HomeScreen> {
   // lost on reinstall) and, only if a place reminder is waiting, the watching service.
   Future<void> _maybeStartWatch() async {
     if (await Permission.activityRecognition.isGranted) await enableActivityReminders();
-    final places = await remindersCollection()
-        .where('status', isEqualTo: 0)
-        .where('triggerType', isEqualTo: 'location')
-        .limit(1)
-        .get();
+    final places = await waitingPlaceReminders().limit(1).get();
     if (places.docs.isNotEmpty) await startWatch();
   }
 
   Future<void> _rescheduleAllNotifications() async {
     final snapshot = await remindersCollection().where('status', isEqualTo: 0).get();
     for (final doc in snapshot.docs) {
-      final when = doc.data()['when'] as Timestamp?;
-      if (when == null || doc.data()['triggerType'] != 'time') continue;
-      await scheduleNotification(int.parse(doc.id), doc.data()['summary'] as String? ?? 'Reminder', when.toDate());
+      final from = reminderStart(doc.data());
+      if (from == null || doc.data()['triggerType'] != 'time') continue;
+      await scheduleNotification(int.parse(doc.id), doc.data()['summary'] as String? ?? 'Reminder', from);
     }
     await rescheduleAllRecurring();
   }
@@ -171,13 +170,13 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       return;
     }
-    final id = await _commit(ready, source: source);
+    final id = await _commit(ready, source: source, emojiLater: draft.needsRefine);
     if (id != null && draft.needsRefine) {
       _refine(id, draft.text, keepCategory: draft.categoryManual, keepList: draft.listManual);
     }
   }
 
-  /// Saved instantly from local rules; let AI polish the summary, category and list afterwards.
+  /// Saved instantly from local rules; let AI polish the summary, category, list and emoji afterwards.
   Future<void> _refine(int id, String text, {required bool keepCategory, required bool keepList}) async {
     try {
       final r = await _extractor.extract(text);
@@ -187,6 +186,7 @@ class _HomeScreenState extends State<HomeScreen> {
         summary: r.summary,
         category: keepCategory ? null : r.category,
         list: keepList ? null : r.list,
+        emoji: r.emoji ?? await suggestEmoji(r.summary, task: true),
       );
     } catch (e) {
       debugPrint('Refinement failed: $e');
@@ -339,7 +339,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final event = r.locationEvent ?? 'enter';
     return Reminder(
       summary: r.summary,
-      when: null,
+      from: null,
       condition: place == null
           ? null
           : isStoreType(place)
@@ -352,12 +352,13 @@ class _HomeScreenState extends State<HomeScreen> {
       category: r.category,
       list: r.list,
       confidence: r.confidence,
+      emoji: r.emoji,
     );
   }
 
   /// A recurring task from the smart input: saved as a routine instead of a reminder.
   Future<void> _commitRoutine(Reminder reminder, Recurrence repeat, {required String source, _Pending? pending}) async {
-    final id = await saveRecurring(reminder.summary, repeat, firstDue: reminder.when);
+    final id = await saveRecurring(reminder.summary, repeat, firstDue: reminder.from, emoji: reminder.emoji);
     if (!mounted) return;
     setState(() {
       if (pending != null) _pending.remove(pending);
@@ -378,7 +379,8 @@ class _HomeScreenState extends State<HomeScreen> {
     await primeNotifications(context, body: 'I’ll ping you when “${reminder.summary}” is due, if you let me.');
   }
 
-  Future<int?> _commit(Reminder reminder, {required String source, _Pending? pending}) async {
+  /// [emojiLater]: a background refinement follows and will pick the emoji.
+  Future<int?> _commit(Reminder reminder, {required String source, _Pending? pending, bool emojiLater = false}) async {
     final repeat = reminder.repeat;
     if (repeat != null) {
       await _commitRoutine(reminder, repeat, source: source, pending: pending);
@@ -387,7 +389,7 @@ class _HomeScreenState extends State<HomeScreen> {
     reminder = await _resolvePlace(reminder);
     if (!mounted) return null;
     final first = await isFirstReminder();
-    final id = await saveReminder(reminder);
+    final id = await saveReminder(reminder, emojiLater: emojiLater);
     if (!mounted) return id;
     setState(() {
       if (pending != null) _pending.remove(pending);
@@ -417,10 +419,10 @@ class _HomeScreenState extends State<HomeScreen> {
     await prepareTrigger(context, reminder);
     if (!mounted || _askedNotificationsThisSession) return;
     _askedNotificationsThisSession = true;
-    final when = reminder.when;
+    final from = reminder.from;
     await primeNotifications(
       context,
-      body: when != null ? 'I’ll ping you ${formatReminderWhen(context, when).toLowerCase()}, if you let me.' : null,
+      body: from != null ? 'I’ll ping you ${formatReminderFrom(context, from).toLowerCase()}, if you let me.' : null,
     );
   }
 
@@ -491,7 +493,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   List<_Doc> _sorted(List<_Doc> docs) {
-    DateTime? when(_Doc d) => (d.data()['when'] as Timestamp?)?.toDate();
+    DateTime? when(_Doc d) => reminderStart(d.data());
     DateTime created(_Doc d) =>
         (d.data()['createdAt'] as Timestamp?)?.toDate() ?? DateTime.fromMillisecondsSinceEpoch(0);
     final timed = docs.where((d) => d.data()['triggerType'] == 'time' && when(d) != null).toList()
@@ -531,6 +533,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           if (!_hiddenRoutines.containsKey(d.id) && Routine(d.id, d.data()).isDueToday(now)) d,
                       ]..sort((a, b) => Routine(a.id, a.data()).nextDue.compareTo(Routine(b.id, b.data()).nextDue));
                       final all = snapshot.data?.docs ?? <_Doc>[];
+                      backfillEmoji(all);
                       // Once Firestore confirms a row is gone, stop tracking it, so a later reopen shows it again.
                       if (snapshot.hasData) {
                         final ids = {for (final d in all) d.id};
@@ -596,7 +599,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _header(ThemeData theme, List<_Doc> docs, int routinesDue) {
     final now = DateTime.now();
     final today = docs.where((d) {
-      final when = (d.data()['when'] as Timestamp?)?.toDate();
+      final when = reminderStart(d.data());
       return when != null && when.year == now.year && when.month == now.month && when.day == now.day;
     }).length;
     final reminders = docs.isEmpty
@@ -645,7 +648,7 @@ class _HomeScreenState extends State<HomeScreen> {
           data: {'summary': r.name, 'condition': '${r.recurrence.label} · ${dueLabel(DateTime.now(), r.nextDue)}'},
           leadingEmoji: r.emoji,
           alert: r.isDue(DateTime.now()),
-          onTap: () => editRoutine(context, doc),
+          onTap: () => showRoutineHistory(context, doc),
           onToggle: () {
             hide();
             markRoutineDone(context, doc);

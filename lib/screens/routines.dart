@@ -9,6 +9,7 @@ import '../models/recurrence.dart';
 import '../permissions.dart';
 import '../recurring_repo.dart';
 import '../widgets/routine_card.dart';
+import '../widgets/routine_history_sheet.dart';
 import '../widgets/routine_sheet.dart';
 
 typedef _Doc = QueryDocumentSnapshot<Map<String, dynamic>>;
@@ -106,6 +107,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
 
   void _onAction(_Doc doc, RoutineAction action) => switch (action) {
         RoutineAction.done => markRoutineDone(context, doc),
+        RoutineAction.history => showRoutineHistory(context, doc),
         RoutineAction.edit => editRoutine(context, doc),
         RoutineAction.skip => skipRoutine(context, doc),
         RoutineAction.delete => deleteRoutine(context, doc),

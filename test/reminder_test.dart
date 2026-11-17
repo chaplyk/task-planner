@@ -24,7 +24,7 @@ void main() {
   test('an activity trigger does not keep a time', () {
     final r = Reminder.tryParse('{"summary": "Stretch", "activity": "RUNNING", "when": "2026-11-17T09:00:00"}')!;
     expect(r.triggerType, 'activity');
-    expect(r.when, isNull);
+    expect(r.from, isNull);
   });
 
   test('no summary or broken JSON gives null', () {
@@ -36,7 +36,7 @@ void main() {
   test('parses a repeat and keeps the first due time', () {
     final r = Reminder.tryParse('{"summary": "Water plants", "repeat": {"every": 3, "unit": "day"}, "when": "2026-11-17T09:00:00"}')!;
     expect(r.repeat, const Recurrence(every: 3, unit: 'day'));
-    expect(r.when, DateTime(2026, 11, 17, 9));
+    expect(r.from, DateTime(2026, 11, 17, 9));
     expect(r.triggerType, 'repeat');
   });
 
@@ -44,5 +44,50 @@ void main() {
     expect(Reminder.tryParse('{"summary": "x", "repeat": {"every": 2, "unit": "year"}}')!.repeat, isNull);
     expect(Reminder.tryParse('{"summary": "x", "repeat": "daily"}')!.repeat, isNull);
     expect(Reminder.tryParse('{"summary": "x", "repeat": null}')!.triggerType, 'none');
+  });
+
+  test('keeps one emoji from the model and drops anything else', () {
+    expect(Reminder.tryParse('{"summary": "Water plants", "emoji": "🌱"}')!.emoji, '🌱');
+    expect(Reminder.tryParse('{"summary": "Water plants", "emoji": "🌱 plants"}')!.emoji, '🌱');
+    expect(Reminder.tryParse('{"summary": "Call mom", "emoji": "👨‍👩‍👧"}')!.emoji, '👨‍👩‍👧');
+    expect(Reminder.tryParse('{"summary": "x", "emoji": ""}')!.emoji, isNull);
+    expect(Reminder.tryParse('{"summary": "x", "emoji": "phone"}')!.emoji, isNull);
+    expect(Reminder.tryParse('{"summary": "x", "emoji": 5}')!.emoji, isNull);
+  });
+
+  test('copies keep the emoji', () {
+    final r = Reminder.tryParse('{"summary": "Water plants", "emoji": "🌱"}')!;
+    expect(r.withList('Home').emoji, '🌱');
+    expect(r.withCategory('home').emoji, '🌱');
+    expect(r.withEmoji('💧').emoji, '💧');
+  });
+
+  test('parses a start and end', () {
+    final r = Reminder.tryParse('{"summary": "Meeting", "from": "2026-11-17T14:00:00", "to": "2026-11-17T15:00:00"}')!;
+    expect(r.from, DateTime(2026, 11, 17, 14));
+    expect(r.to, DateTime(2026, 11, 17, 15));
+    expect(r.triggerType, 'time');
+    expect(r.withList('Work').to, r.to);
+    expect(r.withCategory('work').to, r.to);
+    expect(r.withEmoji('📅').to, r.to);
+  });
+
+  test('still reads the old "when" as the start', () {
+    final r = Reminder.tryParse('{"summary": "Call mom", "when": "2026-11-17T18:00:00"}')!;
+    expect(r.from, DateTime(2026, 11, 17, 18));
+    expect(r.to, isNull);
+  });
+
+  test('drops an end that is not after the start, or has no start', () {
+    expect(Reminder.tryParse('{"summary": "x", "from": "2026-11-17T15:00:00", "to": "2026-11-17T14:00:00"}')!.to, isNull);
+    expect(Reminder.tryParse('{"summary": "x", "to": "2026-11-17T14:00:00"}')!.to, isNull);
+  });
+
+  test('an activity clears the start and end', () {
+    final r = Reminder.tryParse(
+      '{"summary": "x", "activity": "WALKING", "from": "2026-11-17T14:00:00", "to": "2026-11-17T15:00:00"}',
+    )!;
+    expect(r.from, isNull);
+    expect(r.to, isNull);
   });
 }

@@ -5,7 +5,6 @@ import 'package:material_ui/material_ui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../account.dart';
-import '../activity_watch.dart';
 import '../collections.dart';
 import '../gemma/download.dart';
 import '../llm/extractor.dart';
@@ -150,28 +149,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (picked != null) await setThemeMode(picked);
   }
 
-  Future<void> _pickPollPeriod() async {
-    final picked = await showDialog<Duration>(
-      context: context,
-      builder: (context) => SimpleDialog(
-        title: const Text('Poll period'),
-        children: [
-          RadioGroup<Duration>(
-            groupValue: pollPeriodNotifier.value,
-            onChanged: (d) => Navigator.pop(context, d),
-            child: Column(
-              children: [
-                for (final d in pollPeriods)
-                  RadioListTile<Duration>(title: Text(formatPollPeriod(d)), value: d),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-    if (picked != null) await setPollPeriod(picked);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -239,15 +216,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: const Text('Theme'),
             trailing: Text(themeModeLabel(mode)),
             onTap: _pickThemeMode,
-          ),
-        ),
-        const Divider(),
-        ValueListenableBuilder<Duration>(
-          valueListenable: pollPeriodNotifier,
-          builder: (context, period, _) => ListTile(
-            title: const Text('Poll period'),
-            trailing: Text(formatPollPeriod(period)),
-            onTap: _pickPollPeriod,
           ),
         ),
         if (kDebugMode)

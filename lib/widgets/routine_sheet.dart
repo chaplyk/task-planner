@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../llm/emoji.dart';
 import '../models/recurrence.dart';
 import '../recurring_repo.dart';
+import 'emoji_picker_sheet.dart';
 import 'reminder_composer.dart';
 
 /// The intervals offered as one-tap chips.
@@ -61,7 +62,6 @@ class _RoutineSheetState extends State<_RoutineSheet> {
       widget.initial?.recurrence ?? widget.recurrence ?? const Recurrence(every: 1, unit: 'day');
   late bool _custom = !repeatPresets.any((p) => _sameInterval(p.$2, _recurrence));
   String? _manualEmoji;
-  bool _emojiBusy = false;
   DateTime? _nextDue;
 
   bool get _editing => widget.initial != null;
@@ -83,16 +83,9 @@ class _RoutineSheetState extends State<_RoutineSheet> {
   /// The emoji shown: picked by hand, else the saved one, else a live keyword guess.
   String get _emoji => _manualEmoji ?? widget.initial?.emoji ?? keywordEmoji(_name.text);
 
-  Future<void> _regenerateEmoji() async {
-    final name = _name.text.trim();
-    if (name.isEmpty || _emojiBusy) return;
-    setState(() => _emojiBusy = true);
-    final emoji = await suggestEmoji(name, avoid: _emoji, task: true);
-    if (!mounted) return;
-    setState(() {
-      _manualEmoji = emoji;
-      _emojiBusy = false;
-    });
+  Future<void> _pickEmoji() async {
+    final picked = await pickEmoji(context, current: _emoji, subject: _name.text);
+    if (picked != null && mounted) setState(() => _manualEmoji = picked);
   }
 
   Future<void> _pickNextDue() async {
@@ -129,18 +122,16 @@ class _RoutineSheetState extends State<_RoutineSheet> {
             Row(
               children: [
                 Tooltip(
-                  message: 'Pick another emoji',
+                  message: 'Change emoji',
                   child: InkWell(
-                    onTap: _regenerateEmoji,
+                    onTap: _pickEmoji,
                     customBorder: const CircleBorder(),
                     child: Container(
                       width: 56,
                       height: 56,
                       alignment: Alignment.center,
-                      decoration: BoxDecoration(color: scheme.surfaceContainerHighest, shape: BoxShape.circle),
-                      child: _emojiBusy
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                          : Text(_emoji, style: const TextStyle(fontSize: 28)),
+                      decoration: BoxDecoration(color: scheme.primaryContainer, shape: BoxShape.circle),
+                      child: Text(_emoji, style: const TextStyle(fontSize: 28)),
                     ),
                   ),
                 ),
@@ -201,9 +192,9 @@ class _RoutineSheetState extends State<_RoutineSheet> {
               title: Text(_editing ? 'Next due' : 'First due'),
               subtitle: Text(
                 _nextDue != null
-                    ? formatReminderWhen(context, _nextDue!)
+                    ? formatReminderFrom(context, _nextDue!)
                     : _editing
-                    ? formatReminderWhen(context, widget.initial!.nextDue)
+                    ? formatReminderFrom(context, widget.initial!.nextDue)
                     : '${_recurrence.label.replaceFirst('Every', 'In')} from now',
               ),
               trailing: _nextDue == null

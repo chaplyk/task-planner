@@ -1,8 +1,9 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../collections.dart';
+import '../llm/emoji.dart';
+import '../reminders_repo.dart';
 import 'reminder_composer.dart';
 
 String triggerEmoji(String? triggerType) => switch (triggerType) {
@@ -32,10 +33,17 @@ Stream<Map<String, String>> categoryEmojiStream() => categoriesCollection().snap
       },
     );
 
-/// Whether a time reminder's moment has passed.
+/// Whether a time reminder is over: its end has passed, or its start if it has no end.
 bool isOverdue(Map<String, dynamic> data) {
-  final when = (data['when'] as Timestamp?)?.toDate();
-  return data['triggerType'] == 'time' && when != null && when.isBefore(DateTime.now());
+  if (data['triggerType'] != 'time') return false;
+  final last = reminderEnd(data) ?? reminderStart(data);
+  return last != null && last.isBefore(DateTime.now());
+}
+
+/// Whether a time range is happening right now.
+bool isHappening(Map<String, dynamic> data, DateTime now) {
+  final from = reminderStart(data), to = reminderEnd(data);
+  return data['triggerType'] == 'time' && from != null && to != null && !from.isAfter(now) && to.isAfter(now);
 }
 
 class ReminderTile extends StatefulWidget {
@@ -96,11 +104,18 @@ class _ReminderTileState extends State<ReminderTile> {
     final checked = done != _ticking;
     final overdue = !done && (widget.alert || isOverdue(data));
     // A time is formatted now, not when it was saved: a stored "Today at 6 PM" goes stale overnight.
-    final when = data['when'];
-    final condition = data['triggerType'] == 'time' && when is Timestamp
-        ? formatReminderWhen(context, when.toDate())
+    final from = reminderStart(data), to = reminderEnd(data);
+    final happening = !done && isHappening(data, DateTime.now());
+    final String? condition = data['triggerType'] == 'time' && from != null
+        ? happening
+            ? 'Now · until ${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(to!))}'
+            : formatReminderRange(context, from, to)
         : data['condition'] as String?;
     final notified = !done && data['notified'] == true && widget.onClearNotified != null;
+    // Reminders saved before emoji existed show a keyword guess until theirs is filled in.
+    final storedEmoji = data['emoji'];
+    final String emoji = widget.leadingEmoji ??
+        (storedEmoji is String && storedEmoji.isNotEmpty ? storedEmoji : keywordEmoji(data['summary'] as String? ?? ''));
 
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
@@ -137,13 +152,7 @@ class _ReminderTileState extends State<ReminderTile> {
                       shape: BoxShape.circle,
                     ),
                     alignment: Alignment.center,
-                    child: widget.leadingEmoji != null
-                        ? Text(widget.leadingEmoji!, style: const TextStyle(fontSize: 20))
-                        : Icon(
-                            triggerIcon(data),
-                            size: 20,
-                            color: overdue ? scheme.onErrorContainer : scheme.onPrimaryContainer,
-                          ),
+                    child: Text(emoji, style: const TextStyle(fontSize: 20)),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -167,7 +176,11 @@ class _ReminderTileState extends State<ReminderTile> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodyMedium?.copyWith(
-                              color: overdue ? scheme.error : scheme.onSurfaceVariant,
+                              color: overdue
+                                  ? scheme.error
+                                  : happening
+                                  ? scheme.primary
+                                  : scheme.onSurfaceVariant,
                             ),
                           ),
                         ],

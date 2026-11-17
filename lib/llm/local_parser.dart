@@ -21,7 +21,8 @@ class Suggestion {
   const Suggestion({
     required this.kind,
     this.source = SuggestionSource.local,
-    this.when,
+    this.from,
+    this.to,
     this.activity,
     this.location,
     this.locationEvent,
@@ -32,13 +33,17 @@ class Suggestion {
 
   final SuggestionKind kind;
   final SuggestionSource source;
-  final DateTime? when;
+  /// When it starts; for a repeat, its first due time.
+  final DateTime? from;
+
+  /// When it ends, for a time range or a stated length.
+  final DateTime? to;
   final String? activity;
   final String? location;
   final String? locationEvent;
   final String? category;
 
-  /// How often a [SuggestionKind.repeat] task comes back; [when] is then its first due time.
+  /// How often a [SuggestionKind.repeat] task comes back; [from] is then its first due time.
   final Recurrence? repeat;
 
   /// Character ranges of the input that this suggestion was read from.
@@ -84,13 +89,17 @@ class Suggestion {
       category == o.category &&
       repeat?.every == o.repeat?.every &&
       repeat?.unit == o.repeat?.unit &&
-      (when == null) == (o.when == null) &&
-      (when == null || when!.difference(o.when!).inMinutes.abs() < 1);
+      _sameMoment(from, o.from) &&
+      _sameMoment(to, o.to);
+
+  static bool _sameMoment(DateTime? a, DateTime? b) =>
+      (a == null) == (b == null) && (a == null || a.difference(b!).inMinutes.abs() < 1);
 
   Suggestion withSource(SuggestionSource s) => Suggestion(
     kind: kind,
     source: s,
-    when: when,
+    from: from,
+    to: to,
     activity: activity,
     location: location,
     locationEvent: locationEvent,
@@ -163,41 +172,84 @@ Suggestion? _parseTime(String s, DateTime now) {
   final spans = <(int, int)>[];
   DateTime? day;
   int? hour, minute;
+  // The end of a range: a time of day, a number of days after the start day, or a length.
+  int? endHour, endMinute, endDayOffset;
+  Duration? duration;
+
+  // "for 2 hours", "for half an hour", "for 3 days": how long it lasts.
+  final length = RegExp(r'\bfor\s+(half\s+an|\d{1,3}|an?|one|two|three)\s+(minute|min|hour|hr|day)s?\b').firstMatch(s);
+  if (length != null) {
+    final raw = length.group(1)!;
+    final unit = length.group(2)!;
+    if (raw.startsWith('half')) {
+      duration = const Duration(minutes: 30);
+    } else {
+      final n = _count(raw);
+      duration = unit.startsWith('min')
+          ? Duration(minutes: n)
+          : unit.startsWith('h')
+          ? Duration(hours: n)
+          : Duration(days: n);
+    }
+    spans.add((length.start, length.end));
+  }
 
   // "in 20 minutes", "in 2 hours", "in 3 days"
   final rel = RegExp(r'\bin\s+(\d{1,3}|an?|one|two|three)\s+(minute|min|hour|hr|day)s?\b').firstMatch(s);
   if (rel != null) {
-    final raw = rel.group(1)!;
-    final n = switch (raw) {
-      'a' || 'an' || 'one' => 1,
-      'two' => 2,
-      'three' => 3,
-      _ => int.parse(raw),
-    };
+    final n = _count(rel.group(1)!);
     final unit = rel.group(2)!;
     final d = unit.startsWith('min')
         ? Duration(minutes: n)
         : unit.startsWith('h')
         ? Duration(hours: n)
         : Duration(days: n);
-    return Suggestion(kind: SuggestionKind.time, when: now.add(d), spans: [(rel.start, rel.end)]);
+    final from = now.add(d);
+    return Suggestion(
+      kind: SuggestionKind.time,
+      from: from,
+      to: duration == null ? null : from.add(duration),
+      spans: [...spans, (rel.start, rel.end)],
+    );
+  }
+
+  // "from 2 to 3pm", "between 7 and 9", "5-7pm", "9:30-9:45"
+  final range = RegExp(
+    r'\b(?:(from|between|at)\s+)?' + _clock + r'\s*(?:to|and|until|till|-|–)\s*' + _clock + r'(?=\W|$)',
+  ).firstMatch(s);
+  if (range != null) {
+    final lead = range.group(1);
+    var (h1, m1, sfx1) = (int.parse(range.group(2)!), int.tryParse(range.group(3) ?? '') ?? 0, _suffix(range.group(4)));
+    var (h2, m2, sfx2) = (int.parse(range.group(5)!), int.tryParse(range.group(6) ?? '') ?? 0, _suffix(range.group(7)));
+    // Without a lead word, a suffix or minutes it is probably not a time ("buy 2 and 3 apples").
+    final timeLike = lead != null || sfx1 != null || sfx2 != null || range.group(3) != null || range.group(6) != null;
+    if (timeLike && h1 <= 23 && h2 <= 23 && m1 <= 59 && m2 <= 59) {
+      final pickedStart = sfx1 ?? sfx2; // "5-7pm": the start shares the end's suffix
+      h1 = _to24(h1, pickedStart, eveningGuess: true);
+      h2 = _to24(h2, sfx2 ?? sfx1, eveningGuess: false);
+      // "between 7 and 9" -> 19 to 21; "11 to 1" -> 11 to 13.
+      if (sfx2 == null && h2 * 60 + m2 <= h1 * 60 + m1 && h2 < 12) h2 += 12;
+      hour = h1;
+      minute = m1;
+      endHour = h2;
+      endMinute = m2;
+      spans.add((range.start, range.end));
+    }
   }
 
   // "at 6", "at 6:30pm", "at 18:00"
   // Not a street address: "meet Sam at 5 Main Street".
-  final at = RegExp(
-    r'\b(?:at|by|@)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?(?=\W|$)'
-    r'(?!\s+\w+\s+(?:street|st|avenue|ave|road|rd|boulevard|blvd|lane|ln|drive|dr|way|place|square)\b)',
-  ).firstMatch(s);
+  final at = hour != null
+      ? null
+      : RegExp(
+          r'\b(?:at|by|@)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?(?=\W|$)'
+          r'(?!\s+\w+\s+(?:street|st|avenue|ave|road|rd|boulevard|blvd|lane|ln|drive|dr|way|place|square)\b)',
+        ).firstMatch(s);
   if (at != null) {
-    var h = int.parse(at.group(1)!);
+    final h = int.parse(at.group(1)!);
     final m = int.tryParse(at.group(2) ?? '') ?? 0;
-    final suffix = at.group(3)?.replaceAll('.', '');
     if (h <= 23 && m <= 59) {
-      if (suffix == 'pm' && h < 12) h += 12;
-      if (suffix == 'am' && h == 12) h = 0;
-      if (suffix == null && h >= 1 && h <= 7) h += 12; // "at 6" means evening
-      hour = h;
+      hour = _to24(h, _suffix(at.group(3)), eveningGuess: true); // "at 6" means evening
       minute = m;
       spans.add((at.start, at.end));
     }
@@ -211,14 +263,32 @@ Suggestion? _parseTime(String s, DateTime now) {
     spans.add((part.start, part.end));
   }
 
+  final weekdays = _weekdays.join('|');
+  final dayRange = RegExp(r'\b(?:from\s+)?(' + weekdays + r')\s*(?:to|until|till|through|-|–)\s*(' + weekdays + r')\b')
+      .firstMatch(s);
   final tonight = RegExp(r'\btonight\b').firstMatch(s);
   final tomorrow = RegExp(r'\b(?:tomorrow|tmrw|tmr)\b').firstMatch(s);
   final today = RegExp(r'\btoday\b').firstMatch(s);
   final nextWeek = RegExp(r'\bnext\s+week\b').firstMatch(s);
-  final weekday = RegExp(r'\b(?:on\s+|next\s+|this\s+)?(' + _weekdays.join('|') + r')\b').firstMatch(s);
+  final weekday = RegExp(r'\b(?:on\s+|next\s+|this\s+)?(' + weekdays + r')\b').firstMatch(s);
   final base = DateTime(now.year, now.month, now.day);
 
-  if (tomorrow != null) {
+  DateTime nextWeekday(String name) {
+    final target = _weekdays.indexOf(name) + 1;
+    var diff = (target - now.weekday) % 7;
+    if (diff == 0) diff = 7;
+    return base.add(Duration(days: diff));
+  }
+
+  if (dayRange != null) {
+    // "from wednesday to friday": the first day, through the last.
+    day = nextWeekday(dayRange.group(1)!);
+    final first = _weekdays.indexOf(dayRange.group(1)!);
+    final last = _weekdays.indexOf(dayRange.group(2)!);
+    endDayOffset = (last - first) % 7;
+    if (endDayOffset == 0) endDayOffset = 7;
+    spans.add((dayRange.start, dayRange.end));
+  } else if (tomorrow != null) {
     day = base.add(const Duration(days: 1));
     spans.add((tomorrow.start, tomorrow.end));
   } else if (tonight != null) {
@@ -233,31 +303,60 @@ Suggestion? _parseTime(String s, DateTime now) {
     day = base.add(Duration(days: 8 - now.weekday)); // next Monday
     spans.add((nextWeek.start, nextWeek.end));
   } else if (weekday != null) {
-    final target = _weekdays.indexOf(weekday.group(1)!) + 1;
-    var diff = (target - now.weekday) % 7;
-    if (diff == 0) diff = 7;
-    day = base.add(Duration(days: diff));
+    day = nextWeekday(weekday.group(1)!);
     spans.add((weekday.start, weekday.end));
   }
 
   if (day == null && hour == null) return null;
 
+  final DateTime from;
   if (day == null) {
     // Only a time: today, or tomorrow if it has passed.
     var candidate = DateTime(now.year, now.month, now.day, hour!, minute ?? 0);
     if (!candidate.isAfter(now)) candidate = candidate.add(const Duration(days: 1));
-    return Suggestion(kind: SuggestionKind.time, when: candidate, spans: spans);
+    from = candidate;
+  } else {
+    var start = DateTime(day.year, day.month, day.day, hour ?? 9, minute ?? 0);
+    if (hour == null && day == base) {
+      // "today" without a time: this evening, or an hour from now if that has passed.
+      start = DateTime(day.year, day.month, day.day, 18);
+      if (!start.isAfter(now)) start = now.add(const Duration(hours: 1));
+    }
+    if (!start.isAfter(now)) start = start.add(const Duration(days: 1));
+    from = start;
   }
 
-  var when = DateTime(day.year, day.month, day.day, hour ?? 9, minute ?? 0);
-  if (hour == null && day == base) {
-    // "today" without a time: this evening, or an hour from now if that has passed.
-    when = DateTime(day.year, day.month, day.day, 18);
-    if (!when.isAfter(now)) when = now.add(const Duration(hours: 1));
+  DateTime? to;
+  if (endHour != null || endDayOffset != null) {
+    final offset = endDayOffset ?? 0;
+    to = DateTime(from.year, from.month, from.day + offset, endHour ?? 18, endMinute ?? 0);
+    // A time range past midnight ends the next day.
+    if (!to.isAfter(from)) to = to.add(const Duration(days: 1));
+  } else if (duration != null) {
+    to = from.add(duration);
   }
-  if (!when.isAfter(now)) when = when.add(const Duration(days: 1));
-  return Suggestion(kind: SuggestionKind.time, when: when, spans: spans);
+  return Suggestion(kind: SuggestionKind.time, from: from, to: to, spans: spans);
 }
+
+/// A clock time: hour, optional minutes, optional am/pm (three groups).
+const _clock = r'(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?';
+
+String? _suffix(String? raw) => raw?.replaceAll('.', '');
+
+/// [h] in 24-hour time. Without a suffix, 1–7 is read as evening when [eveningGuess] ("at 6" = 18:00).
+int _to24(int h, String? suffix, {required bool eveningGuess}) {
+  if (suffix == 'pm' && h < 12) return h + 12;
+  if (suffix == 'am' && h == 12) return 0;
+  if (suffix == null && eveningGuess && h >= 1 && h <= 7) return h + 12;
+  return h;
+}
+
+int _count(String raw) => switch (raw) {
+  'a' || 'an' || 'one' => 1,
+  'two' => 2,
+  'three' => 3,
+  _ => int.parse(raw),
+};
 
 const _numberWords = {'a': 1, 'an': 1, 'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5, 'six': 6, 'other': 2};
 
@@ -299,7 +398,7 @@ Suggestion? _parseRepeat(String s, Suggestion? time) {
   return Suggestion(
     kind: SuggestionKind.repeat,
     repeat: Recurrence(every: every, unit: unit, mode: time != null ? Recurrence.modeFixed : Recurrence.modeDone),
-    when: time?.when,
+    from: time?.from,
     spans: [(m.start, m.end), ...?time?.spans],
   );
 }
@@ -423,6 +522,10 @@ const _danglers = {
   'as',
   'soon',
   'every',
+  'until',
+  'till',
+  'between',
+  'for',
 };
 
 /// Builds a short imperative summary by stripping the lead phrase and trigger words.

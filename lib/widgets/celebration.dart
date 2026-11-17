@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../llm/emoji.dart';
 import '../models/reminder.dart';
 import '../notifications.dart';
 import '../permissions.dart';
@@ -80,6 +81,7 @@ class _Celebration extends StatelessWidget {
                   'condition': reminder.condition,
                   'triggerType': reminder.triggerType,
                   'activity': reminder.activity,
+                  'emoji': reminder.emoji ?? keywordEmoji(reminder.summary),
                 },
               ),
               const Spacer(),

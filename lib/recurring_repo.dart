@@ -13,6 +13,35 @@ typedef RoutineDoc = DocumentSnapshot<Map<String, dynamic>>;
 /// routines start at one billion, so the two can never collide and both fit in an int32.
 const _idOffset = 1000000000;
 
+/// One time a routine was marked done or skipped.
+class RoutineEvent {
+  const RoutineEvent({required this.at, required this.skipped, this.due});
+
+  final DateTime at;
+  final bool skipped;
+
+  /// When that cycle was due, to tell on time from late. Missing for entries made before history existed.
+  final DateTime? due;
+
+  /// How late it was done or skipped; null when on time or unknown.
+  Duration? get late {
+    if (due == null) return null;
+    final d = at.difference(due!);
+    return d.inMinutes >= 1 ? d : null;
+  }
+
+  static RoutineEvent? tryParse(Object? raw) {
+    if (raw is! Map) return null;
+    final at = raw['at'];
+    if (at is! Timestamp) return null;
+    final due = raw['due'];
+    return RoutineEvent(at: at.toDate(), skipped: raw['action'] == 'skip', due: due is Timestamp ? due.toDate() : null);
+  }
+}
+
+/// History entries kept per routine; older ones are dropped (an hourly routine would otherwise grow without end).
+const _maxHistory = 200;
+
 /// A routine as stored in Firestore, read defensively.
 class Routine {
   Routine(this.id, Map<String, dynamic> data)
@@ -23,7 +52,20 @@ class Routine {
         periodStart = (data['periodStart'] as Timestamp?)?.toDate() ??
             (data['createdAt'] as Timestamp?)?.toDate() ??
             DateTime.now(),
-        lastDone = (data['lastDone'] as Timestamp?)?.toDate();
+        lastDone = (data['lastDone'] as Timestamp?)?.toDate(),
+        history = _history(data);
+
+  /// Newest first. A routine done before history was recorded shows its last completion.
+  static List<RoutineEvent> _history(Map<String, dynamic> data) {
+    final raw = data['history'];
+    final events = [
+      if (raw is List)
+        for (final e in raw) ?RoutineEvent.tryParse(e),
+    ]..sort((a, b) => b.at.compareTo(a.at));
+    final lastDone = data['lastDone'];
+    if (events.isEmpty && lastDone is Timestamp) events.add(RoutineEvent(at: lastDone.toDate(), skipped: false));
+    return events;
+  }
 
   final String id;
   final String name;
@@ -32,6 +74,7 @@ class Routine {
   final DateTime nextDue;
   final DateTime periodStart;
   final DateTime? lastDone;
+  final List<RoutineEvent> history;
 
   int get notificationId => int.parse(id);
 
@@ -80,7 +123,7 @@ Future<Map<String, dynamic>> completeRecurring(RoutineDoc doc) async {
   final r = Routine(doc.id, doc.data() ?? const {});
   final now = DateTime.now();
   final next = r.recurrence.nextDueAfterDone(prevDue: r.nextDue, doneAt: now);
-  return _moveTo(doc, r, next, periodStart: now, lastDone: now);
+  return _moveTo(doc, r, next, now: now, skipped: false, lastDone: now);
 }
 
 /// Skips this cycle without marking it done.
@@ -89,22 +132,40 @@ Future<Map<String, dynamic>> skipRecurring(RoutineDoc doc) async {
   final now = DateTime.now();
   // A skip always moves along the schedule, even for "after I finish" routines.
   final next = r.recurrence.withMode(Recurrence.modeFixed).nextDueAfterDone(prevDue: r.nextDue, doneAt: now);
-  return _moveTo(doc, r, next, periodStart: now, lastDone: r.lastDone);
+  return _moveTo(doc, r, next, now: now, skipped: true, lastDone: r.lastDone);
 }
 
 Future<Map<String, dynamic>> _moveTo(
   RoutineDoc doc,
   Routine r,
   DateTime next, {
-  required DateTime periodStart,
+  required DateTime now,
+  required bool skipped,
   required DateTime? lastDone,
 }) async {
   final data = doc.data() ?? const {};
-  final previous = {'nextDue': data['nextDue'], 'periodStart': data['periodStart'], 'lastDone': data['lastDone']};
+  final entry = {
+    'at': Timestamp.fromDate(now),
+    'action': skipped ? 'skip' : 'done',
+    'due': Timestamp.fromDate(r.nextDue),
+  };
+  final stored = data['history'];
+  // Appended atomically, so an entry written from another screen a moment ago is kept;
+  // only a full history is rewritten, keeping the newest entries.
+  final Object history = stored is List && stored.length >= _maxHistory
+      ? [...stored.skip(stored.length - _maxHistory + 1), entry]
+      : FieldValue.arrayUnion([entry]);
+  final previous = {
+    'nextDue': data['nextDue'],
+    'periodStart': data['periodStart'],
+    'lastDone': data['lastDone'],
+    'history': FieldValue.arrayRemove([entry]),
+  };
   sendWrite(doc.reference.update({
     'nextDue': Timestamp.fromDate(next),
-    'periodStart': Timestamp.fromDate(periodStart),
+    'periodStart': Timestamp.fromDate(now),
     'lastDone': lastDone == null ? null : Timestamp.fromDate(lastDone),
+    'history': history,
   }));
   await cancelNotification(r.notificationId);
   await _schedule(r.notificationId, r.emoji, r.name, next);

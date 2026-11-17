@@ -85,7 +85,7 @@ Future<String> suggestEmoji(String category, {String? avoid, bool task = false})
     );
     if (avoid != null) prompt.write(' Do not use $avoid.');
     final response = await _model!.generateContent([Content.text(prompt.toString())]);
-    final emoji = _firstEmoji(response.text);
+    final emoji = firstEmoji(response.text);
     if (emoji != null) return emoji;
     debugPrint('Gemini returned no usable emoji: ${response.text}');
   } catch (e) {
@@ -106,7 +106,8 @@ String keywordEmoji(String category) {
   return fallbackEmoji;
 }
 
-String? _firstEmoji(String? text) {
+/// The first character of [text] if it is an emoji (not a letter or digit), else null.
+String? firstEmoji(String? text) {
   final trimmed = text?.trim();
   if (trimmed == null || trimmed.isEmpty) return null;
   final first = trimmed.characters.first;

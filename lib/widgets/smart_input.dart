@@ -167,9 +167,9 @@ class SmartInputState extends State<SmartInput> {
 
   List<Suggestion> _fromAi(Reminder r) => [
     if (r.repeat != null)
-      Suggestion(kind: SuggestionKind.repeat, source: SuggestionSource.ai, repeat: r.repeat, when: r.when),
-    if (r.triggerType == 'time' && r.when != null)
-      Suggestion(kind: SuggestionKind.time, source: SuggestionSource.ai, when: r.when),
+      Suggestion(kind: SuggestionKind.repeat, source: SuggestionSource.ai, repeat: r.repeat, from: r.from),
+    if (r.triggerType == 'time' && r.from != null)
+      Suggestion(kind: SuggestionKind.time, source: SuggestionSource.ai, from: r.from, to: r.to),
     if (r.triggerType == 'activity' && r.activity != null)
       Suggestion(kind: SuggestionKind.activity, source: SuggestionSource.ai, activity: r.activity),
     if (r.triggerType == 'location' && r.location != null)
@@ -255,7 +255,8 @@ class SmartInputState extends State<SmartInput> {
     if (trigger != null || _triggerCleared) {
       final spans = trigger == null ? const <(int, int)>[] : _local(text).expand((s) => s.spans);
       final repeating = trigger?.kind == SuggestionKind.repeat;
-      final when = trigger?.kind == SuggestionKind.time || repeating ? trigger?.when : null;
+      final from = trigger?.kind == SuggestionKind.time || repeating ? trigger?.from : null;
+      final to = trigger?.kind == SuggestionKind.time ? trigger?.to : null;
       draft = SmartDraft(
         text: text,
         needsRefine: ai == null,
@@ -264,8 +265,9 @@ class SmartInputState extends State<SmartInput> {
         list: _list,
         reminder: Reminder(
           summary: ai?.summary ?? cleanSummary(text, spans),
-          when: when,
-          condition: !repeating && when != null ? formatReminderWhen(context, when) : trigger?.condition,
+          from: from,
+          to: to,
+          condition: !repeating && from != null ? formatReminderRange(context, from, to) : trigger?.condition,
           transcript: text,
           triggerType: trigger?.triggerType ?? 'none',
           activity: trigger?.activity,
@@ -275,6 +277,7 @@ class SmartInputState extends State<SmartInput> {
           list: _list,
           confidence: 1.0,
           repeat: trigger?.repeat,
+          emoji: ai?.emoji,
         ),
       );
     } else {
@@ -299,7 +302,7 @@ class SmartInputState extends State<SmartInput> {
   Future<void> _adjust(SuggestionKind kind) async {
     final current = _selectedTrigger;
     final picked = switch (kind) {
-      SuggestionKind.time => await _pickTime(current?.when),
+      SuggestionKind.time => await _pickTime(current),
       SuggestionKind.activity => await _pickActivity(),
       SuggestionKind.location => await _pickPlace(current),
       SuggestionKind.repeat => await _pickRepeat(current),
@@ -312,7 +315,7 @@ class SmartInputState extends State<SmartInput> {
     });
   }
 
-  Future<Suggestion?> _pickTime(DateTime? current) async {
+  Future<Suggestion?> _pickTime(Suggestion? current) async {
     final now = DateTime.now();
     final tonight = DateTime(now.year, now.month, now.day, 20);
     final quick = <(String, DateTime)>[
@@ -341,9 +344,16 @@ class SmartInputState extends State<SmartInput> {
       ),
     );
     if (!mounted) return null;
-    final when = choice == 'custom' ? await pickReminderDateTime(context, current) : choice as DateTime?;
-    if (when == null) return null;
-    return Suggestion(kind: SuggestionKind.time, source: SuggestionSource.manual, when: when);
+    final from = choice == 'custom' ? await pickReminderDateTime(context, current?.from) : choice as DateTime?;
+    if (from == null) return null;
+    // Keep a parsed end only if it still comes after the new start.
+    final to = current?.kind == SuggestionKind.time ? current?.to : null;
+    return Suggestion(
+      kind: SuggestionKind.time,
+      source: SuggestionSource.manual,
+      from: from,
+      to: to != null && to.isAfter(from) ? to : null,
+    );
   }
 
   Future<Suggestion?> _pickRepeat(Suggestion? current) async {
@@ -354,7 +364,7 @@ class SmartInputState extends State<SmartInput> {
       kind: SuggestionKind.repeat,
       source: SuggestionSource.manual,
       repeat: repeat.withMode(previous?.repeat?.mode ?? Recurrence.modeDone),
-      when: previous?.when,
+      from: previous?.from,
     );
   }
 
@@ -522,7 +532,7 @@ class SmartInputState extends State<SmartInput> {
   };
 
   String _triggerLabel(Suggestion s) => switch (s.kind) {
-    SuggestionKind.time => formatReminderWhen(context, s.when!),
+    SuggestionKind.time => formatReminderRange(context, s.from!, s.to),
     SuggestionKind.activity => switch (s.activity) {
       'IN_VEHICLE' => 'Next drive',
       'ON_BICYCLE' => 'Next ride',
@@ -535,7 +545,7 @@ class SmartInputState extends State<SmartInput> {
           : s.locationEvent == 'exit'
           ? 'Leaving ${s.location}'
           : 'Arriving ${s.location}',
-    SuggestionKind.repeat => s.when == null ? s.repeat!.label : '${s.repeat!.label} · from ${formatReminderWhen(context, s.when!)}',
+    SuggestionKind.repeat => s.from == null ? s.repeat!.label : '${s.repeat!.label} · from ${formatReminderFrom(context, s.from!)}',
     SuggestionKind.category => s.category ?? '',
   };
 

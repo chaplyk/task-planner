@@ -6,10 +6,10 @@ import 'package:material_ui/material_ui.dart';
 import '../models/recurrence.dart';
 import '../recurring_repo.dart';
 
-enum RoutineAction { done, edit, skip, delete }
+enum RoutineAction { done, history, edit, skip, delete }
 
 /// Grid card: a ring showing how much of the cycle is left around the routine's emoji.
-/// Press and hold to mark it done (a second ring fills while holding); a tap opens it;
+/// Press and hold to mark it done (a second ring fills while holding); a tap opens its history;
 /// the ⋯ menu marks done, edits, skips or deletes it.
 class RoutineCard extends StatefulWidget {
   const RoutineCard({
@@ -98,13 +98,13 @@ class _RoutineCardState extends State<RoutineCard> with TickerProviderStateMixin
           onTapDown: (_) => _start(),
           onTapUp: (_) => _cancel(),
           onTapCancel: _cancel,
-          // Released before the ring closed: a plain tap opens the routine.
+          // Released before the ring closed: a plain tap shows when it was done or skipped.
           onTap: () {
             if (_swallowTap) {
               _swallowTap = false;
               return;
             }
-            widget.onAction(RoutineAction.edit);
+            widget.onAction(RoutineAction.history);
           },
           child: Stack(
             children: [

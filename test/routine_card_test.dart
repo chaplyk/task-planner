@@ -36,11 +36,11 @@ void main() {
     return (events,);
   }
 
-  testWidgets('a short tap opens the routine instead of finishing it', (tester) async {
+  testWidgets('a short tap opens the history instead of finishing it', (tester) async {
     final (events,) = await pump(tester);
     await tester.tap(find.text('Water plants'));
     await tester.pumpAndSettle();
-    expect(events, ['edit']);
+    expect(events, ['history']);
   });
 
   testWidgets('holding marks it done, and letting go afterwards is not a tap', (tester) async {

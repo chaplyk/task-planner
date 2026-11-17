@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../llm/emoji.dart';
 import 'recurrence.dart';
 
 const activities = ['IN_VEHICLE', 'ON_BICYCLE', 'RUNNING', 'WALKING'];
@@ -9,7 +10,8 @@ const activities = ['IN_VEHICLE', 'ON_BICYCLE', 'RUNNING', 'WALKING'];
 class Reminder {
   const Reminder({
     required this.summary,
-    this.when,
+    this.from,
+    this.to,
     this.condition,
     this.transcript,
     this.triggerType = 'time',
@@ -21,9 +23,14 @@ class Reminder {
     this.confidence,
     this.notified = false,
     this.repeat,
+    this.emoji,
   });
   final String summary;
-  final DateTime? when;
+  /// When it starts (the notification fires then).
+  final DateTime? from;
+
+  /// When it ends, for event-like reminders ("2 to 3 pm"); null for a single moment.
+  final DateTime? to;
   final String? condition;
   final String? transcript;
   final String triggerType;
@@ -37,13 +44,17 @@ class Reminder {
   final double? confidence;
   final bool notified;
 
-  /// Set when this is a recurring task (saved as a routine, not a reminder); [when] is its first due time.
+  /// Set when this is a recurring task (saved as a routine, not a reminder); [from] is its first due time.
   final Recurrence? repeat;
+
+  /// One emoji for the task: picked by the user, or by AI / keywords when null at save time.
+  final String? emoji;
 
   /// Same reminder in another list (null = Inbox).
   Reminder withList(String? list) => Reminder(
     summary: summary,
-    when: when,
+    from: from,
+    to: to,
     condition: condition,
     transcript: transcript,
     triggerType: triggerType,
@@ -55,12 +66,33 @@ class Reminder {
     confidence: confidence,
     notified: notified,
     repeat: repeat,
+    emoji: emoji,
+  );
+
+  /// Same reminder with another emoji.
+  Reminder withEmoji(String? emoji) => Reminder(
+    summary: summary,
+    from: from,
+    to: to,
+    condition: condition,
+    transcript: transcript,
+    triggerType: triggerType,
+    activity: activity,
+    location: location,
+    locationEvent: locationEvent,
+    category: category,
+    list: list,
+    confidence: confidence,
+    notified: notified,
+    repeat: repeat,
+    emoji: emoji,
   );
 
   /// Same reminder with another category.
   Reminder withCategory(String? category) => Reminder(
     summary: summary,
-    when: when,
+    from: from,
+    to: to,
     condition: condition,
     transcript: transcript,
     triggerType: triggerType,
@@ -72,6 +104,7 @@ class Reminder {
     confidence: confidence,
     notified: notified,
     repeat: repeat,
+    emoji: emoji,
   );
 
   // Parse a decoded JSON map. Model output is untrusted: any field may be missing or of the wrong type.
@@ -82,7 +115,10 @@ class Reminder {
     }
 
     final summary = json['summary'];
-    final parsedWhen = json['when'] is String ? DateTime.tryParse(json['when']) : null;
+    DateTime? date(String key) => json[key] is String ? DateTime.tryParse(json[key]) : null;
+    // "when" is what the model was asked for before ranges existed.
+    final parsedFrom = date('from') ?? date('when');
+    final parsedTo = date('to');
     final condition = text('condition');
     final category = text('category');
     final list = text('list');
@@ -92,15 +128,18 @@ class Reminder {
     final location = text('location');
     final String? locationEvent = ['enter', 'exit'].contains(json['locationEvent']) ? json['locationEvent'] : null;
     // An activity trigger wins over a time; keeping both would let the time be scheduled later.
-    final when = activity == null ? parsedWhen : null;
+    final from = activity == null ? parsedFrom : null;
+    // An end only makes sense after a start.
+    final to = from != null && parsedTo != null && parsedTo.isAfter(from) ? parsedTo : null;
     final repeat = Recurrence.tryParse(json['repeat']);
+    final emoji = firstEmoji(json['emoji'] is String ? json['emoji'] : null);
 
     String triggerType;
     if (repeat != null) {
       triggerType = 'repeat';
     } else if (activity != null) {
       triggerType = 'activity';
-    } else if (when != null) {
+    } else if (from != null) {
       triggerType = 'time';
     } else if (location != null && locationEvent != null) {
       triggerType = 'location';
@@ -110,7 +149,8 @@ class Reminder {
 
     return Reminder(
       summary: summary is String ? summary : '',
-      when: when,
+      from: from,
+      to: to,
       condition: condition,
       transcript: transcript,
       triggerType: triggerType,
@@ -121,12 +161,14 @@ class Reminder {
       list: list,
       confidence: confidence,
       repeat: repeat,
+      emoji: emoji,
     );
   }
 
   Map<String, dynamic> toJson() => {
     'summary': summary,
-    'when': when?.toIso8601String(),
+    'from': from?.toIso8601String(),
+    'to': to?.toIso8601String(),
     'condition': condition,
     'activity': activity,
     'location': location,
@@ -136,11 +178,13 @@ class Reminder {
     'confidence': confidence,
     'notified': notified,
     'repeat': repeat?.toMap(),
+    'emoji': emoji,
   };
 
   Map<String, dynamic> toMap() => {
     'summary': summary,
-    'when': when == null ? null : Timestamp.fromDate(when!),
+    'from': from == null ? null : Timestamp.fromDate(from!),
+    'to': to == null ? null : Timestamp.fromDate(to!),
     'condition': condition,
     'transcript': transcript,
     'status': 0,
@@ -152,6 +196,7 @@ class Reminder {
     'list': list,
     'confidence': confidence,
     'notified': notified,
+    'emoji': emoji,
     'createdAt': Timestamp.now(),
   };
 
@@ -189,8 +234,8 @@ class Reminder {
 
   @override
   String toString() =>
-      'Reminder(summary: $summary, when: $when, condition: $condition, '
+      'Reminder(summary: $summary, from: $from, to: $to, condition: $condition, '
       'transcript: $transcript, triggerType: $triggerType, activity: $activity, '
       'location: $location, locationEvent: $locationEvent, '
-      'category: $category, list: $list, confidence: $confidence, notified: $notified, repeat: $repeat)';
+      'category: $category, list: $list, confidence: $confidence, notified: $notified, repeat: $repeat, emoji: $emoji)';
 }

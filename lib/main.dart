@@ -8,7 +8,6 @@ import 'package:flutter_gemma_litertlm/flutter_gemma_litertlm.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:native_geofence/native_geofence.dart';
 
-import 'activity_watch.dart';
 import 'app_check.dart';
 import 'llm/model_choice.dart';
 import 'theme_choice.dart';
@@ -38,7 +37,6 @@ Future<void> main() async {
   await _init('App Check', activateAppCheck);
   await _init('Gemma', () => FlutterGemma.initialize(inferenceEngines: [LiteRtLmEngine()]));
   await _init('model choice', loadModelChoice);
-  await _init('poll period', loadPollPeriod);
   await _init('theme', loadThemeMode);
   await _init('notifications', initNotifications);
   // Notification permission is asked after the first reminder, not at launch.
@@ -106,12 +104,13 @@ class MyApp extends StatelessWidget {
   }
 }
 
-const _brandCoral = Color(0xFFFE6D73);
+const _brandBlue = Color(0xFFA2D2FF);
 
 ThemeData _theme(Brightness brightness) {
-  // Fidelity keeps the primary close to the actual brand coral instead of a muted tone.
+  // Fidelity keeps the brand light blue itself as the container colour (chips, highlights,
+  // tile circles), with a deeper blue of the same hue as primary so text on it stays readable.
   final scheme = ColorScheme.fromSeed(
-    seedColor: _brandCoral,
+    seedColor: _brandBlue,
     brightness: brightness,
     dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
   );

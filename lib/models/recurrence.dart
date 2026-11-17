@@ -88,13 +88,14 @@ double remainingShare(DateTime now, DateTime periodStart, DateTime nextDue) {
 /// "due in 4 days", "due in 3 h", "due in 20 min", "due now", "overdue 2 days".
 String dueLabel(DateTime now, DateTime nextDue) {
   final diff = nextDue.difference(now);
-  String span(Duration d) {
-    if (d.inDays >= 1) return d.inDays == 1 ? '1 day' : '${d.inDays} days';
-    if (d.inHours >= 1) return '${d.inHours} h';
-    return '${d.inMinutes} min';
-  }
-
-  if (diff.inMinutes >= 1) return 'due in ${span(diff)}';
+  if (diff.inMinutes >= 1) return 'due in ${spanLabel(diff)}';
   if (diff.inMinutes > -1) return 'due now';
-  return 'overdue ${span(-diff)}';
+  return 'overdue ${spanLabel(-diff)}';
+}
+
+/// "3 days", "1 day", "5 h", "20 min".
+String spanLabel(Duration d) {
+  if (d.inDays >= 1) return d.inDays == 1 ? '1 day' : '${d.inDays} days';
+  if (d.inHours >= 1) return '${d.inHours} h';
+  return '${d.inMinutes} min';
 }
