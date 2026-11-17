@@ -261,7 +261,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Makes sure a place reminder points at a saved place. Matches saved names
   /// case-insensitively; for an unknown place, offers to save it right now.
-  Future<Reminder> _resolvePlace(Reminder r) async {
+  /// Returns null when the user closes that sheet: the reminder is not saved.
+  Future<Reminder?> _resolvePlace(Reminder r) async {
     final place = r.location?.trim();
     if (r.triggerType != 'location' || place == null || place.isEmpty) return r;
 
@@ -318,7 +319,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 TextButton(
                   onPressed: () => Navigator.pop(context, 'anytime'),
-                  child: const Text('Remind me anytime instead'),
+                  child: const Text('Save without reminder'),
                 ),
               ],
             ),
@@ -333,7 +334,9 @@ class _HomeScreenState extends State<HomeScreen> {
       if (name != null) return _withPlace(r, name);
     }
     if (choice == 'anytime') return _withPlace(r, null);
-    // "Later" or dismissed: keep it; it starts working once a place with this name is saved.
+    // Closed without choosing: don't save the reminder.
+    if (choice == null) return null;
+    // "Later": keep it; it starts working once a place with this name is saved.
     return _withPlace(r, place);
   }
 
@@ -389,8 +392,13 @@ class _HomeScreenState extends State<HomeScreen> {
       await _commitRoutine(reminder, repeat, source: source, pending: pending);
       return null;
     }
-    reminder = await _resolvePlace(reminder);
+    final resolved = await _resolvePlace(reminder);
     if (!mounted) return null;
+    if (resolved == null) {
+      if (pending != null) setState(() => _pending.remove(pending));
+      return null;
+    }
+    reminder = resolved;
     final first = await isFirstReminder();
     final id = await saveReminder(reminder, emojiLater: emojiLater);
     if (!mounted) return id;
