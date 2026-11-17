@@ -1,4 +1,3 @@
-import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
@@ -10,16 +9,12 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:native_geofence/native_geofence.dart';
 
 import 'activity_watch.dart';
+import 'app_check.dart';
 import 'llm/model_choice.dart';
 import 'theme_choice.dart';
 import 'notifications.dart';
 import 'screens/onboarding.dart';
 import 'screens/startup.dart';
-
-// Fixed App Check debug token registered in Firebase Console, so debug builds keep
-// working across reinstalls. Pass with --dart-define=APP_CHECK_DEBUG_TOKEN=<uuid>.
-// When empty, the SDK generates a random token per install.
-const _appCheckDebugToken = String.fromEnvironment('APP_CHECK_DEBUG_TOKEN');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,16 +35,7 @@ Future<void> main() async {
 
   // The rest each power one feature. A failure is reported and the app still opens.
   await _init('Google Sign-In', () => GoogleSignIn.instance.initialize());
-  await _init(
-    'App Check',
-    () => FirebaseAppCheck.instance.activate(
-      providerAndroid: kDebugMode
-          ? AndroidDebugProvider(
-              debugToken: _appCheckDebugToken.isEmpty ? null : _appCheckDebugToken,
-            )
-          : const AndroidPlayIntegrityProvider(),
-    ),
-  );
+  await _init('App Check', activateAppCheck);
   await _init('Gemma', () => FlutterGemma.initialize(inferenceEngines: [LiteRtLmEngine()]));
   await _init('model choice', loadModelChoice);
   await _init('poll period', loadPollPeriod);

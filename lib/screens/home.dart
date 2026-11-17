@@ -76,13 +76,10 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  // Background watching is only needed for activity and Wi-Fi place reminders.
-  // Starts silently if the user already granted the permission or has such reminders.
+  // Restores what background reminders need on this device: activity events (they are
+  // lost on reinstall) and, only if a place reminder is waiting, the watching service.
   Future<void> _maybeStartWatch() async {
-    if (await Permission.activityRecognition.isGranted) {
-      await startWatch();
-      return;
-    }
+    if (await Permission.activityRecognition.isGranted) await enableActivityReminders();
     final places = await remindersCollection()
         .where('status', isEqualTo: 0)
         .where('triggerType', isEqualTo: 'location')

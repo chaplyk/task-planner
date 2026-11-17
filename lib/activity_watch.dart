@@ -1,19 +1,22 @@
+import 'dart:ui';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter_activity_recognition/flutter_activity_recognition.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-import 'package:geolocator/geolocator.dart' hide ActivityType;
+import 'package:geolocator/geolocator.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app_check.dart';
 import 'notifications.dart';
 import 'collections.dart';
 import 'store_detection.dart';
 
 const _pollPeriodKey = 'poll_period_seconds';
 
-// Selectable intervals between activity checks
+// Selectable intervals between Wi-Fi and store checks
 const pollPeriods = [
   Duration(seconds: 30),
   Duration(seconds: 45),
@@ -48,6 +51,55 @@ ForegroundTaskOptions _taskOptions() => ForegroundTaskOptions(
       autoRunOnBoot: true,
     );
 
+// ---------------------------------------------------------------- activity reminders
+//
+// "Next time I drive" reminders don't use the background service. Android (Google Play
+// services) tells the app when the user starts driving, cycling, running or walking, even
+// when the app is closed: see ActivityTransitions.kt and ActivityTransitionWorker.kt.
+
+const _activityMethods = MethodChannel('activity/methods');
+const _transitionChannel = MethodChannel('activity/transition');
+
+/// Turns activity reminders on for this device. Needs the activity recognition permission.
+Future<void> enableActivityReminders() async {
+  try {
+    await _activityMethods.invokeMethod<void>('register');
+  } catch (e) {
+    debugPrint('Activity reminders could not be turned on: $e');
+  }
+}
+
+Future<void> disableActivityReminders() async {
+  try {
+    await _activityMethods.invokeMethod<void>('unregister');
+  } catch (e) {
+    debugPrint('Activity reminders could not be turned off: $e');
+  }
+}
+
+/// Started by ActivityTransitionWorker in a headless engine when the user begins an
+/// activity. Tells the worker it is ready, then shows the reminders for the activity
+/// the worker sends ('IN_VEHICLE', ...). An error here reaches the worker as a failure.
+@pragma('vm:entry-point')
+void activityTransitionMain() {
+  WidgetsFlutterBinding.ensureInitialized();
+  DartPluginRegistrant.ensureInitialized();
+  _transitionChannel.setMethodCallHandler((call) async {
+    if (call.method != 'transition') return;
+    final activity = (call.arguments as Map)['activity'] as String;
+    await Firebase.initializeApp();
+    if (FirebaseAuth.instance.currentUser == null) return;
+    await activateAppCheck();
+    await initNotifications();
+    await _checkActivityReminders(activity);
+  });
+  _transitionChannel.invokeMethod<void>('ready');
+}
+
+// ---------------------------------------------------------------- background service
+//
+// Polls for Wi-Fi place and store reminders.
+
 // The callback function should always be a top-level or static function.
 @pragma('vm:entry-point')
 void startWatchCallback() {
@@ -55,7 +107,6 @@ void startWatchCallback() {
 }
 
 class _ActivityTaskHandler extends TaskHandler {
-  ActivityType _activity = ActivityType.UNKNOWN;
   final _stores = StoreReminderWatcher();
   String? _lastWifiName;
   bool _wifiKnown = false;
@@ -65,20 +116,12 @@ class _ActivityTaskHandler extends TaskHandler {
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     await Firebase.initializeApp();
     await initNotifications();
-
-    FlutterActivityRecognition.instance.activityStream.listen((
-      activity,
-    ) {
-      _activity = activity.type;
-    });
   }
 
   @override
   Future<void> onRepeatEvent(DateTime timestamp) async {
     if (FirebaseAuth.instance.currentUser == null) return;
 
-    debugPrint('Current activity: ${_activity.name}');
-    _checkActivityReminders(_activity.name).catchError((Object e) => debugPrint('Activity check failed: $e'));
     _stores.tick(timestamp).catchError((Object e) => debugPrint('Store check failed: $e'));
     try {
       await _checkWifi();

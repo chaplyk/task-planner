@@ -6,10 +6,11 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:native_geofence/native_geofence.dart';
 
+import 'activity_watch.dart';
 import 'collections.dart';
 
 /// Removes everything this device does on behalf of the signed-in user: scheduled
-/// notifications, place geofences and the background service. Without this they
+/// notifications, place geofences, activity events and the background service. Without this they
 /// keep firing the previous user's reminders after sign-out.
 Future<void> clearDeviceState() async {
   Future<void> step(String name, Future<void> Function() run) async {
@@ -22,6 +23,7 @@ Future<void> clearDeviceState() async {
 
   await step('notifications', AwesomeNotifications().cancelAll);
   await step('geofences', NativeGeofenceManager.instance.removeAllGeofences);
+  await step('activity events', disableActivityReminders);
   await step('service', () async {
     if (await FlutterForegroundTask.isRunningService) await FlutterForegroundTask.stopService();
   });

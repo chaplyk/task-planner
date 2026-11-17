@@ -42,11 +42,11 @@ Future<void> requestBackgroundLocationPermission(BuildContext context) async {
 }
 
 /// Gets what a reminder's trigger needs to work in the background: the permission
-/// (activity, or location for stores) and the watching service.
+/// (activity, or location for stores), then activity events or the watching service.
 Future<void> prepareTrigger(BuildContext context, Reminder reminder) async {
   switch (reminder.triggerType) {
     case 'activity':
-      if (await ensureActivityPermission(context)) await startWatch();
+      if (await ensureActivityPermission(context)) await enableActivityReminders();
     case 'location':
       // Store reminders are found by position in the background, which needs "Allow all the time".
       if (isStoreType(reminder.location)) await requestBackgroundLocationPermission(context);

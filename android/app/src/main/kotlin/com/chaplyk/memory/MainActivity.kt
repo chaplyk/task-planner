@@ -51,6 +51,17 @@ class MainActivity : FlutterActivity() {
             },
         )
 
+        // Activity reminders: turns the "started driving / walking / ..." events on and off.
+        MethodChannel(messenger, "activity/methods").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "register" -> ActivityTransitions.register(applicationContext) { e ->
+                    if (e == null) result.success(null) else result.error("register_failed", e.message, null)
+                }
+                "unregister" -> ActivityTransitions.unregister(applicationContext) { result.success(null) }
+                else -> result.notImplemented()
+            }
+        }
+
         MethodChannel(messenger, "speech/methods").setMethodCallHandler { call, result ->
             when (call.method) {
                 "start" -> {
