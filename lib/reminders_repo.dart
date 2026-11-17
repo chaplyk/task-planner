@@ -1,6 +1,10 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'activity_watch.dart';
+import 'calendar_sync.dart';
 import 'collections.dart';
 import 'llm/emoji.dart';
 import 'models/reminder.dart';
@@ -23,6 +27,7 @@ Future<int> saveReminder(Reminder reminder, {bool emojiLater = false}) async {
   final ref = remindersCollection().doc('$id');
   sendWrite(ref.set(saved.toMap()));
   await _schedule(id, reminder.summary, reminder.triggerType, reminder.from);
+  unawaited(syncReminderToCalendar('$id', saved.toMap()));
   if (auto && !emojiLater) {
     suggestEmoji(reminder.summary, task: true).then((e) {
       if (e != saved.emoji) sendWrite(ref.update({'emoji': e}));
@@ -101,17 +106,26 @@ Future<void> updateReminder(ReminderDoc doc, Reminder updated) async {
   final id = int.parse(doc.id);
   await cancelNotification(id);
   await _schedule(id, updated.summary, updated.triggerType, updated.from);
+  unawaited(syncReminderToCalendar(doc.id, {
+    'summary': updated.summary,
+    'from': updated.from == null ? null : Timestamp.fromDate(updated.from!),
+    'to': updated.to == null ? null : Timestamp.fromDate(updated.to!),
+    'triggerType': updated.triggerType,
+    'status': doc.data()?['status'] ?? 0,
+  }));
 }
 
 Future<void> completeReminder(ReminderDoc doc) async {
   sendWrite(doc.reference.update({'status': 1, 'completedAt': Timestamp.now()}));
   await cancelNotification(int.parse(doc.id));
+  unawaited(syncReminderToCalendar(doc.id, null));
 }
 
 Future<void> reopenReminder(ReminderDoc doc) async {
   sendWrite(doc.reference.update({'status': 0, 'completedAt': null, 'notified': false}));
   final r = reminderFromDoc(doc);
   await _schedule(int.parse(doc.id), r.summary, r.triggerType, r.from);
+  unawaited(syncReminderToCalendar(doc.id, {...?doc.data(), 'status': 0}));
 }
 
 /// Clears the "notified" flag so an activity or place reminder can fire again.
@@ -125,17 +139,20 @@ Future<Map<String, dynamic>?> deleteReminder(ReminderDoc doc) async {
   final data = doc.data();
   sendWrite(doc.reference.delete());
   await cancelNotification(int.parse(doc.id));
+  unawaited(syncReminderToCalendar(doc.id, null));
   return data;
 }
 
 Future<void> deleteReminderById(int id) async {
   sendWrite(remindersCollection().doc('$id').delete());
   await cancelNotification(id);
+  unawaited(syncReminderToCalendar('$id', null));
 }
 
 Future<void> restoreReminder(String id, Map<String, dynamic> data) async {
   sendWrite(remindersCollection().doc(id).set(data));
   await _schedule(int.parse(id), data['summary'] ?? '', data['triggerType'], reminderStart(data));
+  unawaited(syncReminderToCalendar(id, data));
 }
 
 /// Sets up what makes a reminder fire: a scheduled notification for a time, or the
@@ -147,12 +164,22 @@ Future<void> _schedule(int id, String summary, String? triggerType, DateTime? fr
 
 /// Background AI refinement: replaces the summary and optionally the category, list and emoji.
 Future<void> updateReminderText(int id, {required String summary, String? category, String? list, String? emoji}) async {
-  sendWrite(remindersCollection().doc('$id').update({
+  final ref = remindersCollection().doc('$id');
+  sendWrite(ref.update({
     'summary': summary,
     'category': ?category,
     'list': ?list,
     'emoji': ?emoji,
   }));
+  // The new summary is the event's title. The cache already has the update.
+  if (calendarSyncNotifier.value) {
+    unawaited(
+      ref.get(const GetOptions(source: Source.cache)).then(
+        (d) => syncReminderToCalendar('$id', d.data()),
+        onError: (Object e) => debugPrint('Calendar sync: reminder $id not in cache: $e'),
+      ),
+    );
+  }
 }
 
 /// Renames a list and moves its tasks along with it.

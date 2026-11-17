@@ -10,6 +10,7 @@ import 'package:native_geofence/native_geofence.dart';
 
 import 'app_check.dart';
 import 'llm/model_choice.dart';
+import 'calendar_sync.dart';
 import 'settings/developer_options.dart';
 import 'settings/theme_choice.dart';
 import 'notifications.dart';
@@ -40,6 +41,7 @@ Future<void> main() async {
   await _init('model choice', loadModelChoice);
   await _init('theme', loadThemeMode);
   await _init('developer options', loadDeveloperOptions);
+  await _init('calendar sync', loadCalendarSync);
   await _init('notifications', initNotifications);
   // Notification permission is asked after the first reminder, not at launch.
   await _init('geofences', () => NativeGeofenceManager.instance.initialize());

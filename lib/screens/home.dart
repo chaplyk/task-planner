@@ -9,6 +9,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../activity_watch.dart';
+import '../calendar_sync.dart';
 import '../collections.dart';
 import '../llm/emoji.dart';
 import '../llm/extractor.dart';
@@ -107,6 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (from == null || doc.data()['triggerType'] != 'time') continue;
       await scheduleNotification(int.parse(doc.id), doc.data()['summary'] as String? ?? 'Reminder', from);
     }
+    await syncAllToCalendar(snapshot.docs);
     await rescheduleAllRecurring();
   }
 

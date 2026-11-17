@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../account.dart';
+import '../calendar_sync.dart';
 import '../collections.dart';
 import 'categories.dart';
 import 'developer_options.dart';
@@ -69,6 +70,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
       messenger.showSnackBar(
         const SnackBar(content: Text('Could not finish deleting your account. Please try again.')),
       );
+    }
+  }
+
+  bool _calendarBusy = false;
+
+  /// Calendar access is asked for only here, when the user turns sync on.
+  Future<void> _toggleCalendarSync(bool on) async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _calendarBusy = true);
+    try {
+      if (!on) {
+        await disableCalendarSync();
+        return;
+      }
+      final open = await remindersCollection().where('status', isEqualTo: 0).get();
+      if (!await enableCalendarSync(open.docs)) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Calendar access is needed to show reminders in your calendar')),
+        );
+      }
+    } catch (e) {
+      debugPrint('Calendar sync toggle failed: $e');
+      messenger.showSnackBar(const SnackBar(content: Text('Could not change calendar sync. Please try again.')));
+    } finally {
+      if (mounted) setState(() => _calendarBusy = false);
     }
   }
 
@@ -143,10 +169,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         const Divider(),
-        const SwitchListTile(
-          title: Text('Sync Calendar (coming soon)'),
-          value: false,
-          onChanged: null,
+        ValueListenableBuilder<bool>(
+          valueListenable: calendarSyncNotifier,
+          builder: (context, enabled, _) => SwitchListTile(
+            title: const Text('Sync with phone calendar'),
+            value: enabled,
+            onChanged: _calendarBusy ? null : _toggleCalendarSync,
+          ),
         ),
         const Divider(),
         ValueListenableBuilder<ThemeMode>(
