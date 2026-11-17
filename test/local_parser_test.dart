@@ -109,9 +109,8 @@ void main() {
 
     test('store words after a condition still count', () {
       expect(_trigger('buy milk when I get to the supermarket')!.location, 'grocery');
-      final leave = _trigger('call mom when I leave the pharmacy')!;
-      expect(leave.location, 'pharmacy');
-      expect(leave.locationEvent, 'exit');
+      // Nearby categories only work on arrival.
+      expect(_trigger('call mom when I leave the pharmacy'), isNull);
     });
 
     test('a street number is not a time', () {

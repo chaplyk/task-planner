@@ -8,6 +8,7 @@ import 'package:native_geofence/native_geofence.dart';
 
 import 'activity_watch.dart';
 import 'collections.dart';
+import 'store_detection.dart';
 
 /// Removes everything this device does on behalf of the signed-in user: scheduled
 /// notifications, place geofences, activity events and the background service. Without this they
@@ -23,6 +24,7 @@ Future<void> clearDeviceState() async {
 
   await step('notifications', AwesomeNotifications().cancelAll);
   await step('geofences', NativeGeofenceManager.instance.removeAllGeofences);
+  await step('nearby stores', clearStoreState);
   await step('activity events', disableActivityReminders);
   await step('service', () async {
     if (await FlutterForegroundTask.isRunningService) await FlutterForegroundTask.stopService();

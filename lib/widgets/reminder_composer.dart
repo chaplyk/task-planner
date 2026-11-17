@@ -153,7 +153,7 @@ class _ComposerState extends State<_Composer> {
         _Trigger.time => formatReminderRange(context, _from!, _to),
         _Trigger.activity => _activityLabels[_activity]!.$3,
         _Trigger.location => isStoreType(_location)
-            ? storeCondition(_location!, _locationEvent)
+            ? storeCondition(_location!)
             : _locationEvent == 'enter'
             ? 'when I arrive at $_location'
             : 'when I leave $_location',
@@ -406,16 +406,17 @@ class _ComposerState extends State<_Composer> {
               width: double.infinity,
               child: SegmentedButton<String>(
                 showSelectedIcon: false,
-                segments: const [
-                  ButtonSegment(value: 'enter', label: Text('When I arrive')),
-                  ButtonSegment(value: 'exit', label: Text('When I leave')),
+                segments: [
+                  const ButtonSegment(value: 'enter', label: Text('When I arrive')),
+                  // Nearby categories only work on arrival.
+                  ButtonSegment(value: 'exit', label: const Text('When I leave'), enabled: !isStoreType(_location)),
                 ],
                 selected: {_locationEvent},
                 onSelectionChanged: (s) => setState(() => _locationEvent = s.first),
               ),
             ),
             const SizedBox(height: 16),
-            const PlaceSectionHeader('Nearby stores'),
+            const PlaceSectionHeader('Nearby categories'),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -424,7 +425,7 @@ class _ComposerState extends State<_Composer> {
                   ChoiceChip(
                     label: Text('${value.emoji} ${value.label}'),
                     selected: _location == key,
-                    onSelected: (_) => setState(() => _location = key),
+                    onSelected: _locationEvent == 'exit' ? null : (_) => setState(() => _location = key),
                   ),
               ],
             ),

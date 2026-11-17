@@ -155,6 +155,8 @@ class ReminderExtractor {
 
       'The "locationEvent" can be "enter" or "exit". '
       'When a location is set, use "enter" unless the user talks about leaving. '
+      'Kinds of store only work with "enter": if the user talks about leaving one, '
+      'use the place name as the user said it instead of the kind of store. '
       'Use null if the reminder is not tied to a location.\n'
 
       'If the task repeats (for example "every day", "weekly", "every 2 weeks", "every monday"), set "repeat" to '

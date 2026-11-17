@@ -269,7 +269,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final match = saved.where((s) => s.toLowerCase() == place.toLowerCase()).firstOrNull;
     if (match != null) return _withPlace(r, match);
     // "the supermarket" -> any grocery store, detected in the background with Google Places.
-    final store = storeTypeFor(place);
+    // Nearby categories only work on arrival: "when I leave the pharmacy" needs a saved place.
+    final store = r.locationEvent == 'exit' ? null : storeTypeFor(place);
     if (store != null) return _withPlace(r, store);
     if (!mounted) return r;
 
@@ -343,7 +344,7 @@ class _HomeScreenState extends State<HomeScreen> {
       condition: place == null
           ? null
           : isStoreType(place)
-          ? storeCondition(place, event)
+          ? storeCondition(place)
           : (event == 'exit' ? 'when I leave $place' : 'when I arrive at $place'),
       transcript: r.transcript,
       triggerType: place == null ? 'none' : 'location',

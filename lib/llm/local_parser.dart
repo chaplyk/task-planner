@@ -72,7 +72,7 @@ class Suggestion {
     SuggestionKind.activity => activityConditions[activity],
     SuggestionKind.location =>
       isStoreType(location)
-          ? storeCondition(location!, locationEvent)
+          ? storeCondition(location!)
           : locationEvent == 'exit'
           ? 'when I leave $location'
           : 'when I arrive at $location',
@@ -436,7 +436,9 @@ List<Suggestion> _parseLocations(String s, List<String> places) {
       final m = RegExp(r'\b' + RegExp.escape(k) + r'\b').allMatches(s).where((m) => _isStorePlace(s, m)).firstOrNull;
       if (m == null) continue;
       final overlapsSaved = result.any((r) => r.spans.any((sp) => m.start < sp.$2 && sp.$1 < m.end));
-      if (!overlapsSaved) result.add(_placeSuggestion(s, m, key));
+      final suggestion = _placeSuggestion(s, m, key);
+      // Nearby categories only work on arrival: "when I leave the pharmacy" is no trigger.
+      if (!overlapsSaved && suggestion.locationEvent != 'exit') result.add(suggestion);
       break;
     }
   }

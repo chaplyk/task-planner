@@ -176,7 +176,8 @@ class SmartInputState extends State<SmartInput> {
       Suggestion(
         kind: SuggestionKind.location,
         source: SuggestionSource.ai,
-        location: storeTypeFor(r.location!) ?? r.location,
+        // Nearby categories only work on arrival: "leave the pharmacy" needs a saved place.
+        location: (r.locationEvent == 'exit' ? null : storeTypeFor(r.location!)) ?? r.location,
         locationEvent: r.locationEvent ?? 'enter',
       ),
   ];
@@ -408,16 +409,17 @@ class SmartInputState extends State<SmartInput> {
               onSelectionChanged: (s) => setSheet(() => event = s.first),
             ),
             const SizedBox(height: 16),
-            const PlaceSectionHeader('Nearby stores'),
+            const PlaceSectionHeader('Nearby categories'),
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
+                // Nearby categories only work on arrival.
                 for (final MapEntry(:key, :value) in storeTypes.entries)
                   ActionChip(
                     avatar: Text(value.emoji),
                     label: Text(_capitalize(value.label)),
-                    onPressed: () => Navigator.pop(context, key),
+                    onPressed: event == 'exit' ? null : () => Navigator.pop(context, key),
                   ),
               ],
             ),
@@ -541,7 +543,7 @@ class SmartInputState extends State<SmartInput> {
     },
     SuggestionKind.location =>
       isStoreType(s.location)
-          ? _capitalize(storeCondition(s.location!, s.locationEvent))
+          ? _capitalize(storeCondition(s.location!))
           : s.locationEvent == 'exit'
           ? 'Leaving ${s.location}'
           : 'Arriving ${s.location}',

@@ -13,7 +13,8 @@ import com.google.android.gms.location.ActivityTransition
 import com.google.android.gms.location.ActivityTransitionRequest
 import com.google.android.gms.location.DetectedActivity
 
-/// Registers for "the user started driving / cycling / running / walking" events.
+/// Registers for "the user started driving / cycling / running / walking" events,
+/// plus "stopped driving" so store reminders know whether the user is in a vehicle.
 ///
 /// Google Play services delivers them to [ActivityTransitionReceiver] through a
 /// PendingIntent, so nothing of the app has to keep running in between.
@@ -64,7 +65,11 @@ object ActivityTransitions {
                 .setActivityType(it)
                 .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_ENTER)
                 .build()
-        }
+        } + ActivityTransition.Builder()
+            // Leaving the vehicle: store reminders must not wait for another activity to start.
+            .setActivityType(DetectedActivity.IN_VEHICLE)
+            .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_EXIT)
+            .build()
         ActivityRecognition.getClient(context)
             .requestActivityTransitionUpdates(ActivityTransitionRequest(transitions), pendingIntent(context))
             .addOnSuccessListener {

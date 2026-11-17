@@ -1,6 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -9,12 +8,11 @@ import '../collections.dart';
 import '../gemma/download.dart';
 import '../llm/extractor.dart';
 import '../llm/model_choice.dart';
-import '../place_types.dart';
-import '../store_detection.dart';
 import '../theme_choice.dart';
 import 'categories.dart';
 import 'locations.dart';
 import 'model.dart';
+import 'store_debug.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -65,62 +63,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (e) {
       debugPrint('Sign out failed: $e');
     }
-  }
-
-  /// Debug: runs the same lookup the background store check uses, right here.
-  Future<void> _whereAmI() async {
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(const SnackBar(content: Text('Looking around…')));
-    Position position;
-    try {
-      position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium),
-      );
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('No position: $e')));
-      return;
-    }
-    final radius = searchRadius(position);
-    final stores = await nearbyStores(position, storeTypes.keys.toSet(), radius: 300);
-    if (!mounted) return;
-    messenger.hideCurrentSnackBar();
-    await showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Stores within 300 m'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              Text(
-                'Fix accuracy ±${position.accuracy.round()} m · '
-                'background check radius ${radius.round()} m',
-              ),
-              const SizedBox(height: 8),
-              if (stores == null)
-                const Text('Lookup failed: OpenStreetMap servers are busy. Try again in a minute.')
-              else if (stores.isEmpty)
-                const Text('No matching stores in OpenStreetMap here.'),
-              for (final s in stores ?? const <NearbyStore>[])
-                ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  leading: Text(
-                    s.storeKeys.map((k) => storeTypes[k]!.emoji).join(),
-                    style: const TextStyle(fontSize: 20),
-                  ),
-                  title: Text(s.name),
-                  subtitle: Text(
-                    '${s.distance.round()} m${s.distance <= radius ? ' · would trigger' : ''}',
-                  ),
-                ),
-            ],
-          ),
-        ),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
-      ),
-    );
   }
 
   Future<void> _pickThemeMode() async {
@@ -222,8 +164,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.storefront_outlined),
             title: const Text('Where am I? (debug)'),
-            subtitle: const Text('Test store detection here (OpenStreetMap)'),
-            onTap: _whereAmI,
+            subtitle: const Text('Test store detection here and see its log'),
+            onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const StoreDebugScreen())),
           ),
         const Divider(),
         if (FirebaseAuth.instance.currentUser?.isAnonymous == false)

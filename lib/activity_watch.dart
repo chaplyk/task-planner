@@ -5,10 +5,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:native_geofence/native_geofence.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 
 import 'app_check.dart';
@@ -16,11 +18,12 @@ import 'notifications.dart';
 import 'collections.dart';
 import 'place_types.dart';
 import 'store_detection.dart';
+import 'store_log.dart';
 
-/// How often store reminders take a position fix. Wi-Fi places don't poll: they follow
-/// network change events. A minute keeps a store visit noticed after about 5–6 minutes
-/// (see [StayTracker.threshold]) and "when I leave" about a minute after moving on.
-const _storeCheckPeriod = Duration(minutes: 1);
+/// How often the stores near the user are looked up again and their geofences renewed
+/// (they expire after [storeGeofenceExpiration]). Visits themselves are noticed by the
+/// geofences, not by polling. Wi-Fi places follow network change events.
+const _storeCheckPeriod = Duration(minutes: 15);
 
 /// A Wi-Fi drop must last this long to count as leaving (routers and phones blip).
 const _wifiLossGrace = Duration(seconds: 30);
@@ -78,7 +81,7 @@ void activityTransitionMain() {
 // ---------------------------------------------------------------- background service
 //
 // Runs only while a place reminder is waiting. Wi-Fi places react to network change
-// events; store reminders check the position every [_storeCheckPeriod].
+// events; store reminders refresh the nearby stores' geofences every [_storeCheckPeriod].
 
 // The callback function should always be a top-level or static function.
 @pragma('vm:entry-point')
@@ -87,7 +90,9 @@ void startWatchCallback() {
 }
 
 class _ActivityTaskHandler extends TaskHandler {
-  final _stores = StoreReminderWatcher();
+  final _stores = StoreGeofencer();
+  // Store kinds the waiting reminders ask for, as of the last refresh.
+  Set<String>? _storeKinds;
 
   // The place reminders still waiting to fire, kept current by one Firestore listener.
   // Asking the server on every poll instead costs a billed read each time, even when
@@ -105,6 +110,12 @@ class _ActivityTaskHandler extends TaskHandler {
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     await Firebase.initializeApp();
     await initNotifications();
+    try {
+      await NativeGeofenceManager.instance.initialize();
+    } catch (e) {
+      await storeLog('Service: geofences unavailable ($e)');
+    }
+    await storeLog('Service started (${starter.name})');
     // Follow sign-in and sign-out: the reminders belong to the current user.
     _authSub = FirebaseAuth.instance.authStateChanges().listen(_watchReminders);
     // Android calls back on every network change, so Wi-Fi needs no polling.
@@ -119,6 +130,9 @@ class _ActivityTaskHandler extends TaskHandler {
     _waitingSub = waitingPlaceReminders().snapshots().listen(
       (s) {
         _waiting = s.docs;
+        // A store kind added or gone (or the first load): refresh now rather than at
+        // the next repeat event, up to [_storeCheckPeriod] away.
+        if (!setEquals(_storeKindsOf(s.docs), _storeKinds)) _refreshStores();
         if (!_hasWifiPlaces) {
           _wifiKnown = false; // take a fresh baseline when such a reminder appears
           _lossTimer?.cancel();
@@ -133,14 +147,26 @@ class _ActivityTaskHandler extends TaskHandler {
     );
   }
 
+  static Set<String> _storeKindsOf(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) => {
+    for (final d in docs)
+      if (isStoreArrival(d.data())) d.data()['location'] as String,
+  };
+
   /// Whether a saved-place (Wi-Fi) reminder is waiting, as opposed to only store reminders.
   bool get _hasWifiPlaces => (_waiting ?? const []).any((d) => !isStoreType(d.data()['location'] as String?));
 
   @override
-  Future<void> onRepeatEvent(DateTime timestamp) async {
+  Future<void> onRepeatEvent(DateTime timestamp) => _refreshStores();
+
+  Future<void> _refreshStores() async {
     final waiting = _waiting;
     if (FirebaseAuth.instance.currentUser == null || waiting == null) return;
-    await _stores.tick(timestamp, waiting).catchError((Object e) => debugPrint('Store check failed: $e'));
+    final kinds = _storeKindsOf(waiting);
+    if (!setEquals(kinds, _storeKinds)) {
+      await storeLog('Service: store reminders waiting for ${kinds.isEmpty ? 'nothing' : kinds.join(', ')}');
+    }
+    _storeKinds = kinds;
+    await _stores.refresh(waiting).catchError((Object e) => debugPrint('Store refresh failed: $e'));
   }
 
   Future<void> _onNetworkChanged() async {
@@ -204,6 +230,7 @@ class _ActivityTaskHandler extends TaskHandler {
 
   @override
   Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
+    await storeLog('Service stopped${isTimeout ? ' (timeout)' : ''}');
     _lossTimer?.cancel();
     await _networkSub?.cancel();
     await _waitingSub?.cancel();
