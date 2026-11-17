@@ -6,8 +6,12 @@ import '../models/recurrence.dart';
 import '../recurring_repo.dart';
 import '../screens/routines.dart';
 
-/// Bottom sheet listing when a routine was marked done or skipped. Follows the routine live.
+enum _DetailsAction { edit, delete }
+
+/// Bottom sheet with a routine's details: when it was marked done or skipped, Done / Skip,
+/// and an Edit / Delete menu. Follows the routine live.
 Future<void> showRoutineHistory(BuildContext context, RoutineDoc doc) {
+  final screen = context;
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -30,7 +34,7 @@ Future<void> showRoutineHistory(BuildContext context, RoutineDoc doc) {
               final data = current?.data();
               // Deleted while open.
               if (current == null || data == null) return const SizedBox.shrink();
-              return _History(doc: current, routine: Routine(doc.id, data), scroll: scroll);
+              return _History(doc: current, routine: Routine(doc.id, data), scroll: scroll, screen: screen);
             },
           ),
         ),
@@ -40,12 +44,25 @@ Future<void> showRoutineHistory(BuildContext context, RoutineDoc doc) {
 }
 
 class _History extends StatelessWidget {
-  const _History({required this.doc, required this.routine, required this.scroll});
+  const _History({required this.doc, required this.routine, required this.scroll, required this.screen});
 
   /// The latest snapshot, so Done / Skip work from the current due time.
   final RoutineDoc doc;
   final Routine routine;
   final ScrollController scroll;
+
+  /// The screen that opened the sheet: Delete closes the sheet and shows its Undo there.
+  final BuildContext screen;
+
+  void _onMenu(BuildContext context, _DetailsAction action) {
+    switch (action) {
+      case _DetailsAction.edit:
+        editRoutine(context, doc);
+      case _DetailsAction.delete:
+        Navigator.pop(context);
+        if (screen.mounted) deleteRoutine(screen, doc);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -95,6 +112,20 @@ class _History extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+            PopupMenuButton<_DetailsAction>(
+              tooltip: 'More',
+              onSelected: (a) => _onMenu(context, a),
+              itemBuilder: (context) => const [
+                PopupMenuItem(
+                  value: _DetailsAction.edit,
+                  child: ListTile(leading: Icon(Icons.edit_outlined), title: Text('Edit')),
+                ),
+                PopupMenuItem(
+                  value: _DetailsAction.delete,
+                  child: ListTile(leading: Icon(Icons.delete_outline_rounded), title: Text('Delete')),
+                ),
+              ],
             ),
           ],
         ),

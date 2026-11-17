@@ -27,7 +27,7 @@ void main() {
               routine: routine,
               now: now,
               onDone: () => events.add('done'),
-              onAction: (a) => events.add(a.name),
+              onOpen: () => events.add('open'),
             ),
           ),
         ),
@@ -40,7 +40,7 @@ void main() {
     final (events,) = await pump(tester);
     await tester.tap(find.text('Water plants'));
     await tester.pumpAndSettle();
-    expect(events, ['history']);
+    expect(events, ['open']);
   });
 
   testWidgets('holding marks it done, and letting go afterwards is not a tap', (tester) async {
@@ -68,12 +68,8 @@ void main() {
     expect(events, isNot(contains('done')));
   });
 
-  testWidgets('the menu offers Mark as done', (tester) async {
-    final (events,) = await pump(tester);
-    await tester.tap(find.byTooltip('More'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Mark as done'));
-    await tester.pumpAndSettle();
-    expect(events, ['done']);
+  testWidgets('the card has no menu: actions live in the details', (tester) async {
+    await pump(tester);
+    expect(find.byTooltip('More'), findsNothing);
   });
 }

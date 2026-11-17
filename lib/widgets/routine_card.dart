@@ -6,24 +6,24 @@ import 'package:material_ui/material_ui.dart';
 import '../models/recurrence.dart';
 import '../recurring_repo.dart';
 
-enum RoutineAction { done, history, edit, skip, delete }
-
 /// Grid card: a ring showing how much of the cycle is left around the routine's emoji.
-/// Press and hold to mark it done (a second ring fills while holding); a tap opens its history;
-/// the ⋯ menu marks done, edits, skips or deletes it.
+/// Press and hold to mark it done (a second ring fills while holding); a tap opens its
+/// details (history, skip, edit, delete).
 class RoutineCard extends StatefulWidget {
   const RoutineCard({
     super.key,
     required this.routine,
     required this.now,
     required this.onDone,
-    required this.onAction,
+    required this.onOpen,
   });
 
   final Routine routine;
   final DateTime now;
   final VoidCallback onDone;
-  final ValueChanged<RoutineAction> onAction;
+
+  /// A plain tap: opens the routine's details.
+  final VoidCallback onOpen;
 
   @override
   State<RoutineCard> createState() => _RoutineCardState();
@@ -104,7 +104,7 @@ class _RoutineCardState extends State<RoutineCard> with TickerProviderStateMixin
               _swallowTap = false;
               return;
             }
-            widget.onAction(RoutineAction.history);
+            widget.onOpen();
           },
           child: Stack(
             children: [
@@ -169,44 +169,6 @@ class _RoutineCardState extends State<RoutineCard> with TickerProviderStateMixin
                       },
                     ),
                   ],
-                ),
-              ),
-              Positioned(
-                top: 8,
-                right: 8,
-                child: PopupMenuButton<RoutineAction>(
-                  tooltip: 'More',
-                  onSelected: (a) {
-                    if (a == RoutineAction.done) {
-                      HapticFeedback.mediumImpact();
-                      _pop.forward(from: 0);
-                    }
-                    widget.onAction(a);
-                  },
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(
-                      value: RoutineAction.done,
-                      child: ListTile(leading: Icon(Icons.check_rounded), title: Text('Mark as done')),
-                    ),
-                    PopupMenuItem(
-                      value: RoutineAction.skip,
-                      child: ListTile(leading: Icon(Icons.skip_next_rounded), title: Text('Skip this time')),
-                    ),
-                    PopupMenuItem(
-                      value: RoutineAction.edit,
-                      child: ListTile(leading: Icon(Icons.edit_outlined), title: Text('Edit')),
-                    ),
-                    PopupMenuItem(
-                      value: RoutineAction.delete,
-                      child: ListTile(leading: Icon(Icons.delete_outline_rounded), title: Text('Delete')),
-                    ),
-                  ],
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(color: scheme.surfaceContainerHighest, shape: BoxShape.circle),
-                    child: Icon(Icons.more_horiz_rounded, size: 20, color: scheme.onSurfaceVariant),
-                  ),
                 ),
               ),
             ],
