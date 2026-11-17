@@ -22,6 +22,6 @@ Future<String?> createList(String name, List<String> existing) async {
   if (clean.isEmpty) return null;
   final lower = clean.toLowerCase();
   if (lower == inboxName.toLowerCase() || existing.any((e) => e.toLowerCase() == lower)) return null;
-  await listsCollection().add({'name': clean, 'createdAt': Timestamp.now()});
+  sendWrite(listsCollection().doc().set({'name': clean, 'createdAt': Timestamp.now()}));
   return clean;
 }

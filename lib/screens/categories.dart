@@ -114,12 +114,13 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     }
     _controller.clear();
     FocusScope.of(context).unfocus();
-    final ref = await categoriesCollection().add({
+    final ref = categoriesCollection().doc();
+    sendWrite(ref.set({
       'name': name,
       'emoji': _pendingEmoji,
       'color': randomCategoryColor(used: docs.map((d) => d.data()['color'] as int?)),
-    });
-    await ref.update({'emoji': await suggestEmoji(name)});
+    }));
+    sendWrite(ref.update({'emoji': await suggestEmoji(name)}));
   }
 
   Future<void> _openDetails(_CategoryDoc doc) async {
@@ -131,7 +132,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       builder: (context) => _CategorySheet(doc: doc),
     );
     if (delete != true || !mounted) return;
-    await doc.reference.delete();
+    sendWrite(doc.reference.delete());
     _snack(
       'Deleted "${data['name']}"',
       action: SnackBarAction(

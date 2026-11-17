@@ -1,6 +1,6 @@
 # Privacy Policy for NagadAI
 
-**Last updated:** November 16, 2026
+**Last updated:** November 17, 2026
 
 This privacy policy explains how NagadAI ("the App", "we", "us") collects, uses, and protects your information. NagadAI is developed and maintained by an individual developer. If you have questions, contact us at **nagadai@chaplyk.com**.
 
@@ -46,7 +46,7 @@ The text of a reminder (typed, or transcribed from your voice) is turned into a 
 The App uses Google Firebase services that collect data automatically:
 
 - **Firebase Analytics** records app usage events, such as signing in, starting a voice recording, and creating a reminder (with how it was created and its trigger type, not its text), along with device and app information.
-- **Firebase Crashlytics** collects crash and error reports. When the AI fails to understand a reminder, the report includes the reminder text and the model's output so the problem can be diagnosed.
+- **Firebase Crashlytics** collects crash and error reports. These do not include the text of your reminders.
 - **Firebase Performance Monitoring** measures how long operations take.
 - **Firebase App Check** (using Google Play Integrity) verifies that requests come from a genuine copy of the App.
 

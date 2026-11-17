@@ -133,6 +133,8 @@ class SmartInputState extends State<SmartInput> {
   /// is clear (locally or from AI); otherwise leaves it with suggestions.
   Future<void> setTranscript(String text) async {
     _controller.text = text;
+    // Setting the text scheduled a live AI request; this method makes its own, so one is enough.
+    _aiTimer?.cancel();
     if (_localTriggers(text).isNotEmpty) {
       _send();
       return;
@@ -220,6 +222,9 @@ class SmartInputState extends State<SmartInput> {
     setState(() {});
     _aiTimer?.cancel();
     if (!widget.liveAi || text.length < _aiMinLength || _aiCache.containsKey(text)) return;
+    // A trigger found locally is already shown as a chip; AI then only polishes the
+    // wording, which happens once after sending instead of on every pause in typing.
+    if (_localTriggers(text).isNotEmpty) return;
     _aiTimer = Timer(_aiDelay, () async {
       if (!mounted || _text != text) return;
       setState(() => _aiBusy = true);

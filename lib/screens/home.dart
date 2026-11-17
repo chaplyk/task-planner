@@ -73,6 +73,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _recordingTimer?.cancel();
+    _extractor.close();
     super.dispose();
   }
 

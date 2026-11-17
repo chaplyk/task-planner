@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'dart:ui';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -12,6 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'app_check.dart';
 import 'notifications.dart';
 import 'collections.dart';
+import 'place_types.dart';
 import 'store_detection.dart';
 
 const _pollPeriodKey = 'poll_period_seconds';
@@ -108,6 +112,13 @@ void startWatchCallback() {
 
 class _ActivityTaskHandler extends TaskHandler {
   final _stores = StoreReminderWatcher();
+
+  // The place reminders still waiting to fire, kept current by one Firestore listener.
+  // Asking the server on every poll instead costs a billed read each time, even when
+  // nothing changed: thousands a day per user.
+  StreamSubscription<User?>? _authSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _waitingSub;
+  List<QueryDocumentSnapshot<Map<String, dynamic>>>? _waiting; // null until first loaded
   String? _lastWifiName;
   bool _wifiKnown = false;
   int _missedWifiReads = 0;
@@ -116,13 +127,32 @@ class _ActivityTaskHandler extends TaskHandler {
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     await Firebase.initializeApp();
     await initNotifications();
+    // Follow sign-in and sign-out: the reminders belong to the current user.
+    _authSub = FirebaseAuth.instance.authStateChanges().listen(_watchReminders);
+  }
+
+  void _watchReminders(User? user) {
+    _waitingSub?.cancel();
+    _waitingSub = null;
+    _waiting = null;
+    if (user == null) return;
+    _waitingSub = waitingPlaceReminders().snapshots().listen(
+      (s) => _waiting = s.docs,
+      onError: (Object e) => debugPrint('Watching place reminders failed: $e'),
+    );
   }
 
   @override
   Future<void> onRepeatEvent(DateTime timestamp) async {
-    if (FirebaseAuth.instance.currentUser == null) return;
+    final waiting = _waiting;
+    if (FirebaseAuth.instance.currentUser == null || waiting == null) return;
 
-    _stores.tick(timestamp).catchError((Object e) => debugPrint('Store check failed: $e'));
+    _stores.tick(timestamp, waiting).catchError((Object e) => debugPrint('Store check failed: $e'));
+    // Reading the Wi-Fi name is only needed while a saved-place reminder is waiting.
+    if (!waiting.any((d) => !isStoreType(d.data()['location'] as String?))) {
+      _wifiKnown = false; // take a fresh baseline when such a reminder appears
+      return;
+    }
     try {
       await _checkWifi();
     } catch (e) {
@@ -158,12 +188,16 @@ class _ActivityTaskHandler extends TaskHandler {
 
     final previous = _lastWifiName;
     _lastWifiName = wifiName;
-    if (previous != null) await _checkWifiReminders(previous, 'exit');
-    if (wifiName != null) await _checkWifiReminders(wifiName, 'enter');
+    final waiting = _waiting ?? const [];
+    if (previous != null) await _checkWifiReminders(previous, 'exit', waiting);
+    if (wifiName != null) await _checkWifiReminders(wifiName, 'enter', waiting);
   }
 
   @override
-  Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {}
+  Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
+    await _waitingSub?.cancel();
+    await _authSub?.cancel();
+  }
 }
 
 Future<void> _checkActivityReminders(String activity) async {
@@ -179,21 +213,20 @@ Future<void> _checkActivityReminders(String activity) async {
   }
 }
 
-Future<void> _checkWifiReminders(String? wifiName, String event) async {
+/// Fires the [waiting] reminders tied to the saved place whose Wi-Fi network is [wifiName].
+Future<void> _checkWifiReminders(
+  String wifiName,
+  String event,
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> waiting,
+) async {
   final wifiLocationDoc = await locationsCollection().where('wifi', isEqualTo: wifiName).limit(1).get();
   if (wifiLocationDoc.docs.isEmpty) return;
   final locationName = wifiLocationDoc.docs.first.data()['name'];
 
-  final snapshot = await remindersCollection()
-      .where('status', isEqualTo: 0)
-      .where('location', isEqualTo: locationName)
-      .where('locationEvent', isEqualTo: event)
-      .where('notified', isEqualTo: false)
-      .get();
-
-  for (final doc in snapshot.docs) {
+  for (final doc in waiting) {
+    if (doc.data()['location'] != locationName || doc.data()['locationEvent'] != event) continue;
     await showNotification(int.parse(doc.id), doc.data()['summary'] ?? 'Reminder');
-    await doc.reference.update({'notified': true});
+    sendWrite(doc.reference.update({'notified': true}));
   }
 }
 

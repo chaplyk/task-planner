@@ -172,6 +172,12 @@ class StayTracker {
   }
 }
 
+/// Open place reminders that have not fired yet: what the background service watches for.
+Query<Map<String, dynamic>> waitingPlaceReminders() => remindersCollection()
+    .where('status', isEqualTo: 0)
+    .where('triggerType', isEqualTo: 'location')
+    .where('notified', isEqualTo: false);
+
 /// Background check for "at the grocery store" style reminders. Cheap when idle:
 /// no position fix unless such a reminder is waiting, no lookup unless the
 /// user has stayed in one area for [StayTracker.threshold].
@@ -185,16 +191,12 @@ class StoreReminderWatcher {
 
   Future<void> _notify(QueryDocumentSnapshot<Map<String, dynamic>> doc, String storeName) async {
     await showNotification(int.parse(doc.id), '${doc.data()['summary'] ?? 'Reminder'} · $storeName');
-    await doc.reference.update({'notified': true});
+    sendWrite(doc.reference.update({'notified': true}));
   }
 
-  Future<void> tick(DateTime now) async {
-    final waiting = await remindersCollection()
-        .where('status', isEqualTo: 0)
-        .where('triggerType', isEqualTo: 'location')
-        .where('notified', isEqualTo: false)
-        .get();
-    final storeDocs = waiting.docs.where((d) => isStoreType(d.data()['location'] as String?)).toList();
+  /// [waiting] is the open, not yet notified place reminders (see [waitingPlaceReminders]).
+  Future<void> tick(DateTime now, List<QueryDocumentSnapshot<Map<String, dynamic>>> waiting) async {
+    final storeDocs = waiting.where((d) => isStoreType(d.data()['location'] as String?)).toList();
     if (storeDocs.isEmpty) {
       _stay.reset();
       _here = {};

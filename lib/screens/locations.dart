@@ -120,15 +120,16 @@ Future<String?> addPlace(BuildContext context, {String? initialName}) async {
   );
 
   if (type == 'wifi' && wifi != null) {
-    await locationsCollection().add({'name': name, 'wifi': wifi});
+    sendWrite(locationsCollection().doc().set({'name': name, 'wifi': wifi}));
     return name;
   }
   if (type == 'gps' && position != null) {
-    final doc = await locationsCollection().add({
+    final doc = locationsCollection().doc();
+    sendWrite(doc.set({
       'name': name,
       'latitude': position.latitude,
       'longitude': position.longitude,
-    });
+    }));
     await _registerGeofence(doc.id, position.latitude, position.longitude);
     return name;
   }
@@ -170,7 +171,7 @@ class LocationsScreen extends StatelessWidget {
 
   Future<void> _deleteLocation(DocumentReference doc) async {
     await NativeGeofenceManager.instance.removeGeofenceById(doc.id); // TO ADD: do not remove for wifi location
-    await doc.delete();
+    sendWrite(doc.delete());
   }
 
   @override
