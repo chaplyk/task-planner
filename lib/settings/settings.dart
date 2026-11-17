@@ -138,6 +138,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
       children: [
+        ListTile(
+          title: const Text('Saved Locations'),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const LocationsScreen()),
+          ),
+        ),
+        const Divider(),
         StreamBuilder(
           stream: categoriesCollection().snapshots(),
           builder: (context, snapshot) {
@@ -161,29 +169,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
           },
         ),
         const Divider(),
-        ListTile(
-          title: const Text('Saved Locations'),
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const LocationsScreen()),
-          ),
-        ),
-        const Divider(),
-        ValueListenableBuilder<bool>(
-          valueListenable: calendarSyncNotifier,
-          builder: (context, enabled, _) => SwitchListTile(
-            title: const Text('Sync with phone calendar'),
-            value: enabled,
-            onChanged: _calendarBusy ? null : _toggleCalendarSync,
-          ),
-        ),
-        const Divider(),
         ValueListenableBuilder<ThemeMode>(
           valueListenable: themeModeNotifier,
           builder: (context, mode, _) => ListTile(
             title: const Text('Theme'),
             trailing: Text(themeModeLabel(mode)),
             onTap: _pickThemeMode,
+          ),
+        ),
+        const Divider(),
+        ValueListenableBuilder<bool>(
+          valueListenable: calendarSyncNotifier,
+          builder: (context, enabled, _) => SwitchListTile(
+            title: const Text('Sync with Device Calendar'),
+            value: enabled,
+            onChanged: _calendarBusy ? null : _toggleCalendarSync,
           ),
         ),
         ValueListenableBuilder<bool>(
@@ -194,7 +194,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     const Divider(),
                     ListTile(
-                      leading: const Icon(Icons.developer_mode_outlined),
                       title: const Text('Developer options'),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => Navigator.push(
