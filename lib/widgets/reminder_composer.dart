@@ -144,6 +144,8 @@ class _ComposerState extends State<_Composer> {
         category: _category ?? 'other',
         list: _list,
         confidence: 1.0,
+        // A recurring task keeps repeating unless the user switched it to a place or activity.
+        repeat: _trigger == _Trigger.time || _trigger == _Trigger.none ? widget.initial?.repeat : null,
       ),
     );
   }

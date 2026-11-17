@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'recurrence.dart';
+
 const activities = ['IN_VEHICLE', 'ON_BICYCLE', 'RUNNING', 'WALKING'];
 
 class Reminder {
@@ -18,6 +20,7 @@ class Reminder {
     this.list,
     this.confidence,
     this.notified = false,
+    this.repeat,
   });
   final String summary;
   final DateTime? when;
@@ -34,6 +37,9 @@ class Reminder {
   final double? confidence;
   final bool notified;
 
+  /// Set when this is a recurring task (saved as a routine, not a reminder); [when] is its first due time.
+  final Recurrence? repeat;
+
   /// Same reminder in another list (null = Inbox).
   Reminder withList(String? list) => Reminder(
     summary: summary,
@@ -48,6 +54,7 @@ class Reminder {
     list: list,
     confidence: confidence,
     notified: notified,
+    repeat: repeat,
   );
 
   /// Same reminder with another category.
@@ -64,6 +71,7 @@ class Reminder {
     list: list,
     confidence: confidence,
     notified: notified,
+    repeat: repeat,
   );
 
   // Parse a decoded JSON map. Model output is untrusted: any field may be missing or of the wrong type.
@@ -85,9 +93,12 @@ class Reminder {
     final String? locationEvent = ['enter', 'exit'].contains(json['locationEvent']) ? json['locationEvent'] : null;
     // An activity trigger wins over a time; keeping both would let the time be scheduled later.
     final when = activity == null ? parsedWhen : null;
+    final repeat = Recurrence.tryParse(json['repeat']);
 
     String triggerType;
-    if (activity != null) {
+    if (repeat != null) {
+      triggerType = 'repeat';
+    } else if (activity != null) {
       triggerType = 'activity';
     } else if (when != null) {
       triggerType = 'time';
@@ -109,6 +120,7 @@ class Reminder {
       category: category,
       list: list,
       confidence: confidence,
+      repeat: repeat,
     );
   }
 
@@ -123,6 +135,7 @@ class Reminder {
     'list': list,
     'confidence': confidence,
     'notified': notified,
+    'repeat': repeat?.toMap(),
   };
 
   Map<String, dynamic> toMap() => {
@@ -179,5 +192,5 @@ class Reminder {
       'Reminder(summary: $summary, when: $when, condition: $condition, '
       'transcript: $transcript, triggerType: $triggerType, activity: $activity, '
       'location: $location, locationEvent: $locationEvent, '
-      'category: $category, list: $list, confidence: $confidence, notified: $notified)';
+      'category: $category, list: $list, confidence: $confidence, notified: $notified, repeat: $repeat)';
 }

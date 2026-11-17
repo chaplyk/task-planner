@@ -9,6 +9,7 @@ String triggerEmoji(String? triggerType) => switch (triggerType) {
       'time' => '⏰',
       'activity' => '🏃',
       'location' => '📍',
+      'repeat' => '🔁',
       _ => '📝',
     };
 
@@ -45,6 +46,9 @@ class ReminderTile extends StatefulWidget {
     this.onToggle,
     this.done = false,
     this.highlight = false,
+    this.onClearNotified,
+    this.leadingEmoji,
+    this.alert = false,
   });
 
   final Map<String, dynamic> data;
@@ -56,6 +60,15 @@ class ReminderTile extends StatefulWidget {
 
   /// Briefly glows to draw attention to a just-created reminder.
   final bool highlight;
+
+  /// Clears the "Notified" badge shown once the reminder has fired. The badge is hidden when null.
+  final VoidCallback? onClearNotified;
+
+  /// Shown in the circle instead of the trigger icon (routines).
+  final String? leadingEmoji;
+
+  /// Styles the row as needing attention, like an overdue reminder.
+  final bool alert;
 
   @override
   State<ReminderTile> createState() => _ReminderTileState();
@@ -81,12 +94,13 @@ class _ReminderTileState extends State<ReminderTile> {
     final data = widget.data;
     final done = widget.done;
     final checked = done != _ticking;
-    final overdue = !done && isOverdue(data);
+    final overdue = !done && (widget.alert || isOverdue(data));
     // A time is formatted now, not when it was saved: a stored "Today at 6 PM" goes stale overnight.
     final when = data['when'];
     final condition = data['triggerType'] == 'time' && when is Timestamp
         ? formatReminderWhen(context, when.toDate())
         : data['condition'] as String?;
+    final notified = !done && data['notified'] == true && widget.onClearNotified != null;
 
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
@@ -122,11 +136,14 @@ class _ReminderTileState extends State<ReminderTile> {
                       color: overdue ? scheme.errorContainer : scheme.primaryContainer,
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(
-                      triggerIcon(data),
-                      size: 20,
-                      color: overdue ? scheme.onErrorContainer : scheme.onPrimaryContainer,
-                    ),
+                    alignment: Alignment.center,
+                    child: widget.leadingEmoji != null
+                        ? Text(widget.leadingEmoji!, style: const TextStyle(fontSize: 20))
+                        : Icon(
+                            triggerIcon(data),
+                            size: 20,
+                            color: overdue ? scheme.onErrorContainer : scheme.onPrimaryContainer,
+                          ),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -146,13 +163,17 @@ class _ReminderTileState extends State<ReminderTile> {
                         if (condition != null && condition.isNotEmpty) ...[
                           const SizedBox(height: 2),
                           Text(
-                            overdue ? 'Overdue · $condition' : condition,
+                            overdue && !widget.alert ? 'Overdue · $condition' : condition,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: overdue ? scheme.error : scheme.onSurfaceVariant,
                             ),
                           ),
+                        ],
+                        if (notified) ...[
+                          const SizedBox(height: 6),
+                          _NotifiedBadge(onClear: widget.onClearNotified!),
                         ],
                       ],
                     ),
@@ -181,6 +202,49 @@ class _ReminderTileState extends State<ReminderTile> {
   }
 }
 
+/// Small "Notified ×" pill: the reminder has fired. Tapping it clears the flag so it can fire again.
+class _NotifiedBadge extends StatelessWidget {
+  const _NotifiedBadge({required this.onClear});
+
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Tooltip(
+      message: 'Clear so it can remind you again',
+      child: Material(
+        color: scheme.secondaryContainer,
+        shape: const StadiumBorder(),
+        child: InkWell(
+          customBorder: const StadiumBorder(),
+          onTap: () {
+            HapticFeedback.selectionClick();
+            onClear();
+          },
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 3, 6, 3),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.notifications_active_rounded, size: 14, color: scheme.onSecondaryContainer),
+                const SizedBox(width: 4),
+                Text(
+                  'Notified',
+                  style: theme.textTheme.labelMedium?.copyWith(color: scheme.onSecondaryContainer),
+                ),
+                const SizedBox(width: 2),
+                Icon(Icons.close_rounded, size: 14, color: scheme.onSecondaryContainer),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Swipe right for the primary action (done / reopen), left to delete.
 /// The parent must stop showing the row as soon as a swipe fires (see [onPrimary]/[onDelete]).
 class SwipeableReminder extends StatelessWidget {
@@ -191,6 +255,8 @@ class SwipeableReminder extends StatelessWidget {
     required this.onDelete,
     this.primaryLabel = 'Done',
     this.primaryIcon = Icons.check_rounded,
+    this.deleteLabel = 'Delete',
+    this.deleteIcon = Icons.delete_outline_rounded,
   });
 
   final Widget child;
@@ -198,6 +264,10 @@ class SwipeableReminder extends StatelessWidget {
   final VoidCallback onDelete;
   final String primaryLabel;
   final IconData primaryIcon;
+
+  /// Label and icon for the left swipe (e.g. "Skip" for routines).
+  final String deleteLabel;
+  final IconData deleteIcon;
 
   Widget _background(Color color, Color onColor, IconData icon, String label, Alignment align) {
     return Container(
@@ -224,8 +294,8 @@ class SwipeableReminder extends StatelessWidget {
       secondaryBackground: _background(
         scheme.error,
         scheme.onError,
-        Icons.delete_outline_rounded,
-        'Delete',
+        deleteIcon,
+        deleteLabel,
         Alignment.centerRight,
       ),
       onDismissed: (direction) {

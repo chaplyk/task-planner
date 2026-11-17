@@ -1,9 +1,10 @@
 // Instant, on-device trigger suggestions for the smart input.
 // Pure Dart and synchronous so it can run on every keystroke; AI refines later.
 
+import '../models/recurrence.dart';
 import '../place_types.dart';
 
-enum SuggestionKind { time, activity, location, category }
+enum SuggestionKind { time, activity, location, category, repeat }
 
 enum SuggestionSource { local, ai, manual }
 
@@ -25,6 +26,7 @@ class Suggestion {
     this.location,
     this.locationEvent,
     this.category,
+    this.repeat,
     this.spans = const [],
   });
 
@@ -36,6 +38,9 @@ class Suggestion {
   final String? locationEvent;
   final String? category;
 
+  /// How often a [SuggestionKind.repeat] task comes back; [when] is then its first due time.
+  final Recurrence? repeat;
+
   /// Character ranges of the input that this suggestion was read from.
   final List<(int, int)> spans;
 
@@ -46,6 +51,7 @@ class Suggestion {
     SuggestionKind.activity => 'activity',
     SuggestionKind.location => 'location',
     SuggestionKind.category => 'none',
+    SuggestionKind.repeat => 'repeat',
   };
 
   String get emoji => switch (kind) {
@@ -53,6 +59,7 @@ class Suggestion {
     SuggestionKind.activity => activityEmoji[activity] ?? '🏃',
     SuggestionKind.location => storeTypes[location]?.emoji ?? '📍',
     SuggestionKind.category => '🏷️',
+    SuggestionKind.repeat => '🔁',
   };
 
   /// Human-readable condition for activity/location; time is formatted by the UI.
@@ -64,6 +71,7 @@ class Suggestion {
           : locationEvent == 'exit'
           ? 'when I leave $location'
           : 'when I arrive at $location',
+    SuggestionKind.repeat => repeat?.label,
     _ => null,
   };
 
@@ -74,6 +82,8 @@ class Suggestion {
       location == o.location &&
       locationEvent == o.locationEvent &&
       category == o.category &&
+      repeat?.every == o.repeat?.every &&
+      repeat?.unit == o.repeat?.unit &&
       (when == null) == (o.when == null) &&
       (when == null || when!.difference(o.when!).inMinutes.abs() < 1);
 
@@ -85,6 +95,7 @@ class Suggestion {
     location: location,
     locationEvent: locationEvent,
     category: category,
+    repeat: repeat,
     spans: spans,
   );
 }
@@ -134,7 +145,12 @@ List<Suggestion> suggestTriggers(
   final lower = text.toLowerCase();
   final result = <Suggestion>[];
   final time = _parseTime(lower, now ?? DateTime.now());
-  if (time != null) result.add(time);
+  final repeat = _parseRepeat(lower, time);
+  if (repeat != null) {
+    result.add(repeat);
+  } else if (time != null) {
+    result.add(time);
+  }
   result.addAll(_parseLocations(lower, places));
   final activity = _parseActivity(lower);
   if (activity != null) result.add(activity);
@@ -241,6 +257,51 @@ Suggestion? _parseTime(String s, DateTime now) {
   }
   if (!when.isAfter(now)) when = when.add(const Duration(days: 1));
   return Suggestion(kind: SuggestionKind.time, when: when, spans: spans);
+}
+
+const _numberWords = {'a': 1, 'an': 1, 'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5, 'six': 6, 'other': 2};
+
+/// "every 3 days", "every other week", "daily", "every monday at 9", "every morning".
+/// A [time] found in the same text becomes the first due time and makes the schedule fixed.
+Suggestion? _parseRepeat(String s, Suggestion? time) {
+  int? every;
+  String? unit;
+  RegExpMatch? m;
+
+  m = RegExp(r'\bevery\s+(?:(\d{1,3}|other|a|an|one|two|three|four|five|six)\s+)?(hour|day|week|month)s?\b').firstMatch(s);
+  if (m != null) {
+    final raw = m.group(1);
+    every = raw == null ? 1 : (int.tryParse(raw) ?? _numberWords[raw]);
+    unit = m.group(2);
+  }
+  if (unit == null) {
+    m = RegExp(r'\b(hourly|daily|weekly|monthly|biweekly|fortnightly|every\s+fortnight)\b').firstMatch(s);
+    if (m != null) {
+      (every, unit) = switch (m.group(1)!) {
+        'hourly' => (1, 'hour'),
+        'daily' => (1, 'day'),
+        'weekly' => (1, 'week'),
+        'monthly' => (1, 'month'),
+        _ => (2, 'week'),
+      };
+    }
+  }
+  if (unit == null) {
+    m = RegExp(r'\bevery\s+(' + _weekdays.join('|') + r')\b').firstMatch(s);
+    if (m != null) (every, unit) = (1, 'week');
+  }
+  if (unit == null) {
+    m = RegExp(r'\bevery\s+(morning|afternoon|evening|night)\b').firstMatch(s);
+    if (m != null) (every, unit) = (1, 'day');
+  }
+  if (m == null || unit == null || every == null || every < 1) return null;
+
+  return Suggestion(
+    kind: SuggestionKind.repeat,
+    repeat: Recurrence(every: every, unit: unit, mode: time != null ? Recurrence.modeFixed : Recurrence.modeDone),
+    when: time?.when,
+    spans: [(m.start, m.end), ...?time?.spans],
+  );
 }
 
 Suggestion? _parseActivity(String s) {
@@ -361,6 +422,7 @@ const _danglers = {
   'while',
   'as',
   'soon',
+  'every',
 };
 
 /// Builds a short imperative summary by stripping the lead phrase and trigger words.

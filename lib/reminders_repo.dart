@@ -69,6 +69,9 @@ Future<void> reopenReminder(ReminderDoc doc) async {
   await _schedule(int.parse(doc.id), r.summary, r.triggerType, r.when);
 }
 
+/// Clears the "notified" flag so an activity or place reminder can fire again.
+void clearNotified(ReminderDoc doc) => sendWrite(doc.reference.update({'notified': false}));
+
 /// Deletes a reminder. Returns its data so it can be restored with [restoreReminder].
 Future<Map<String, dynamic>?> deleteReminder(ReminderDoc doc) async {
   final data = doc.data();

@@ -38,7 +38,7 @@ Future<void> signOut() async {
 /// Deletes every document the user owns. The account itself holds no other data.
 Future<void> _deleteUserData() async {
   final db = FirebaseFirestore.instance;
-  for (final collection in [remindersCollection(), categoriesCollection(), locationsCollection(), listsCollection()]) {
+  for (final collection in [remindersCollection(), categoriesCollection(), locationsCollection(), listsCollection(), recurringCollection()]) {
     final docs = (await collection.get()).docs;
     // A batch takes at most 500 writes.
     for (var i = 0; i < docs.length; i += 400) {

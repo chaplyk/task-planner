@@ -65,6 +65,7 @@ class _QuickCheckState extends State<_QuickCheck> {
         category: category ?? _r.category,
         list: _r.list,
         confidence: 1.0,
+        repeat: _r.repeat,
       );
 
   Future<void> _editTime() async {

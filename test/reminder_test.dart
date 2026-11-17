@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nagadai/models/recurrence.dart';
 import 'package:nagadai/models/reminder.dart';
 
 void main() {
@@ -30,5 +31,18 @@ void main() {
     expect(Reminder.tryParse('{"summary": 5}'), isNull);
     expect(Reminder.tryParse('{"summary": "x", }'), isNull);
     expect(Reminder.tryParse('sorry'), isNull);
+  });
+
+  test('parses a repeat and keeps the first due time', () {
+    final r = Reminder.tryParse('{"summary": "Water plants", "repeat": {"every": 3, "unit": "day"}, "when": "2026-11-17T09:00:00"}')!;
+    expect(r.repeat, const Recurrence(every: 3, unit: 'day'));
+    expect(r.when, DateTime(2026, 11, 17, 9));
+    expect(r.triggerType, 'repeat');
+  });
+
+  test('drops an invalid repeat', () {
+    expect(Reminder.tryParse('{"summary": "x", "repeat": {"every": 2, "unit": "year"}}')!.repeat, isNull);
+    expect(Reminder.tryParse('{"summary": "x", "repeat": "daily"}')!.repeat, isNull);
+    expect(Reminder.tryParse('{"summary": "x", "repeat": null}')!.triggerType, 'none');
   });
 }

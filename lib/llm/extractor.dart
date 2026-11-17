@@ -132,7 +132,7 @@ class ReminderExtractor {
   String _prompt(String transcript) =>
       'Extract the task from the reminder into '
       '{"summary": "...", "when": null, "condition": null, "activity": null, '
-      '"location": null, "locationEvent": null, "category": null, "list": null, "confidence": 0.0}.\n'
+      '"location": null, "locationEvent": null, "category": null, "list": null, "repeat": null, "confidence": 0.0}.\n'
       'The summary is short and imperative, without any time or place.\n'
 
       'If time mentioned, fill the "when" accordingly.\n'
@@ -154,6 +154,10 @@ class ReminderExtractor {
       'The "locationEvent" can be "enter" or "exit". '
       'When a location is set, use "enter" unless the user talks about leaving. '
       'Use null if the reminder is not tied to a location.\n'
+
+      'If the task repeats (for example "every day", "weekly", "every 2 weeks", "every monday"), set "repeat" to '
+      '{"every": N, "unit": "hour" or "day" or "week" or "month"}, and put the first time it is due in "when" if one is mentioned. '
+      'Otherwise "repeat" is null.\n'
 
       'The "condition" is the time or activity as said in the reminder. '
       'For example "tomorrow afternoon" or "next time I drive".\n'

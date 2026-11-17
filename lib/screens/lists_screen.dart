@@ -406,6 +406,7 @@ class _ListsScreenState extends State<ListsScreen> {
           data: doc.data(),
           done: done,
           onTap: () => _edit(doc),
+          onClearNotified: () => clearNotified(doc),
           onToggle: () => done ? _reopen(doc) : _complete(doc),
         ),
       ),

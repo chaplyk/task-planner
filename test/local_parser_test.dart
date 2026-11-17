@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nagadai/llm/local_parser.dart';
+import 'package:nagadai/models/recurrence.dart';
 
 // Monday, 16 Nov 2026, 10:00
 final _now = DateTime(2026, 11, 16, 10);
@@ -145,6 +146,48 @@ void main() {
 
     test('strips place phrase', () {
       expect(clean('buy milk when I leave office', places: ['office']), 'Buy milk');
+    });
+  });
+
+  group('repeat', () {
+    Suggestion repeat(String text) => _trigger(text)!;
+    String summary(String text) =>
+        cleanSummary(text, suggestTriggers(text, now: _now).where((s) => s.isTrigger).expand((s) => s.spans));
+
+    test('every 3 days counts from completion', () {
+      final t = repeat('water plants every 3 days');
+      expect(t.kind, SuggestionKind.repeat);
+      expect(t.repeat, const Recurrence(every: 3, unit: 'day'));
+      expect(t.when, isNull);
+      expect(summary('water plants every 3 days'), 'Water plants');
+    });
+
+    test('every other day', () {
+      expect(repeat('gym every other day').repeat, const Recurrence(every: 2, unit: 'day'));
+    });
+
+    test('monthly and biweekly', () {
+      expect(repeat('pay rent monthly').repeat, const Recurrence(every: 1, unit: 'month'));
+      expect(repeat('clean the fridge biweekly').repeat, const Recurrence(every: 2, unit: 'week'));
+      expect(summary('pay rent monthly'), 'Pay rent');
+    });
+
+    test('every monday at 9 is a fixed weekly schedule starting next monday', () {
+      final t = repeat('standup every monday at 9');
+      expect(t.repeat, const Recurrence(every: 1, unit: 'week', mode: Recurrence.modeFixed));
+      expect(t.when, DateTime(2026, 11, 23, 9));
+      expect(summary('standup every monday at 9'), 'Standup');
+    });
+
+    test('every morning is a fixed daily schedule', () {
+      final t = repeat('take meds every morning');
+      expect(t.repeat, const Recurrence(every: 1, unit: 'day', mode: Recurrence.modeFixed));
+      expect(t.when, DateTime(2026, 11, 17, 9));
+      expect(summary('take meds every morning'), 'Take meds');
+    });
+
+    test('a plain time is not a repeat', () {
+      expect(repeat('call mom tomorrow at 6').kind, SuggestionKind.time);
     });
   });
 }

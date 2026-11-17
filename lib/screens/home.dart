@@ -16,9 +16,12 @@ import '../models/reminder.dart';
 import '../notifications.dart';
 import '../permissions.dart';
 import '../place_types.dart';
+import '../models/recurrence.dart';
+import '../recurring_repo.dart';
 import '../reminders_repo.dart';
 import '../widgets/celebration.dart';
 import 'locations.dart';
+import 'routines.dart';
 import '../widgets/quick_check_sheet.dart';
 import '../widgets/reminder_composer.dart';
 import '../widgets/reminder_tile.dart';
@@ -60,6 +63,13 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _askedNotificationsThisSession = false;
   bool _voiceDraft = false;
   Timer? _recordingTimer;
+  final _routines = recurringCollection().snapshots();
+  // Routines ticked or swiped away (id -> the due time they had), hidden until Firestore shows them moved on.
+  final _hiddenRoutines = <String, DateTime>{};
+  // Due routines appear the minute they become due.
+  late final Timer _tick = Timer.periodic(const Duration(minutes: 1), (_) {
+    if (mounted) setState(() {});
+  });
 
   @override
   void initState() {
@@ -68,11 +78,13 @@ class _HomeScreenState extends State<HomeScreen> {
     _rescheduleAllNotifications();
     _maybeStartWatch();
     syncGeofences();
+    _tick;
   }
 
   @override
   void dispose() {
     _recordingTimer?.cancel();
+    _tick.cancel();
     _extractor.close();
     super.dispose();
   }
@@ -96,6 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (when == null || doc.data()['triggerType'] != 'time') continue;
       await scheduleNotification(int.parse(doc.id), doc.data()['summary'] as String? ?? 'Reminder', when.toDate());
     }
+    await rescheduleAllRecurring();
   }
 
   // ---------------------------------------------------------------- voice
@@ -342,7 +355,35 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// A recurring task from the smart input: saved as a routine instead of a reminder.
+  Future<void> _commitRoutine(Reminder reminder, Recurrence repeat, {required String source, _Pending? pending}) async {
+    final id = await saveRecurring(reminder.summary, repeat, firstDue: reminder.when);
+    if (!mounted) return;
+    setState(() {
+      if (pending != null) _pending.remove(pending);
+    });
+    HapticFeedback.mediumImpact();
+    FirebaseAnalytics.instance.logEvent(name: 'routine_created', parameters: {'source': source, 'unit': repeat.unit});
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          content: Text('🔁  Saved routine: ${reminder.summary} · ${repeat.label.toLowerCase()}'),
+          action: SnackBarAction(label: 'Undo', onPressed: () => deleteRecurringById(id)),
+        ),
+      );
+    if (_askedNotificationsThisSession) return;
+    _askedNotificationsThisSession = true;
+    await primeNotifications(context, body: 'I’ll ping you when “${reminder.summary}” is due, if you let me.');
+  }
+
   Future<int?> _commit(Reminder reminder, {required String source, _Pending? pending}) async {
+    final repeat = reminder.repeat;
+    if (repeat != null) {
+      await _commitRoutine(reminder, repeat, source: source, pending: pending);
+      return null;
+    }
     reminder = await _resolvePlace(reminder);
     if (!mounted) return null;
     final first = await isFirstReminder();
@@ -474,48 +515,61 @@ class _HomeScreenState extends State<HomeScreen> {
               child: GestureDetector(
                 onTap: () => FocusScope.of(context).unfocus(),
                 behavior: HitTestBehavior.translucent,
-                child: StreamBuilder(
-                  stream: remindersCollection().where('status', isEqualTo: 0).snapshots(),
-                  builder: (context, snapshot) {
-                    final all = snapshot.data?.docs ?? <_Doc>[];
-                    // Once Firestore confirms a row is gone, stop tracking it, so a later reopen shows it again.
-                    if (snapshot.hasData) {
-                      final ids = {for (final d in all) d.id};
-                      _hidden.removeWhere((id) => !ids.contains(id));
-                    }
-                    final docs = _sorted([
-                      for (final d in all)
-                        if (!_hidden.contains(d.id)) d,
-                    ]);
-                    final loading = !snapshot.hasData;
-                    final empty = !loading && docs.isEmpty && _pending.isEmpty;
-                    return CustomScrollView(
-                      slivers: [
-                        SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(20, 28, 20, 8),
-                          sliver: SliverToBoxAdapter(child: _header(theme, docs)),
-                        ),
-                        if (loading)
-                          const SliverFillRemaining(
-                            hasScrollBody: false,
-                            child: Center(child: CircularProgressIndicator()),
-                          )
-                        else if (empty)
-                          SliverFillRemaining(
-                            hasScrollBody: false,
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-                              child: _EmptyState(onExample: _tryExample),
-                            ),
-                          )
-                        else
+                child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: _routines,
+                  builder: (context, routineSnap) => StreamBuilder(
+                    stream: remindersCollection().where('status', isEqualTo: 0).snapshots(),
+                    builder: (context, snapshot) {
+                      final now = DateTime.now();
+                      final routineDocs = routineSnap.data?.docs ?? <_Doc>[];
+                      if (routineSnap.hasData) {
+                        final dueAt = {for (final d in routineDocs) d.id: Routine(d.id, d.data()).nextDue};
+                        _hiddenRoutines.removeWhere((id, due) => dueAt[id] != due);
+                      }
+                      final dueRoutines = [
+                        for (final d in routineDocs)
+                          if (!_hiddenRoutines.containsKey(d.id) && Routine(d.id, d.data()).isDueToday(now)) d,
+                      ]..sort((a, b) => Routine(a.id, a.data()).nextDue.compareTo(Routine(b.id, b.data()).nextDue));
+                      final all = snapshot.data?.docs ?? <_Doc>[];
+                      // Once Firestore confirms a row is gone, stop tracking it, so a later reopen shows it again.
+                      if (snapshot.hasData) {
+                        final ids = {for (final d in all) d.id};
+                        _hidden.removeWhere((id) => !ids.contains(id));
+                      }
+                      final docs = _sorted([
+                        for (final d in all)
+                          if (!_hidden.contains(d.id)) d,
+                      ]);
+                      final loading = !snapshot.hasData;
+                      final empty = !loading && docs.isEmpty && _pending.isEmpty && dueRoutines.isEmpty;
+                      return CustomScrollView(
+                        slivers: [
                           SliverPadding(
-                            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-                            sliver: SliverToBoxAdapter(child: _upNext(theme, docs)),
+                            padding: const EdgeInsets.fromLTRB(20, 28, 20, 8),
+                            sliver: SliverToBoxAdapter(child: _header(theme, docs, dueRoutines.length)),
                           ),
-                      ],
-                    );
-                  },
+                          if (loading)
+                            const SliverFillRemaining(
+                              hasScrollBody: false,
+                              child: Center(child: CircularProgressIndicator()),
+                            )
+                          else if (empty)
+                            SliverFillRemaining(
+                              hasScrollBody: false,
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                                child: _EmptyState(onExample: _tryExample),
+                              ),
+                            )
+                          else
+                            SliverPadding(
+                              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                              sliver: SliverToBoxAdapter(child: _upNext(theme, docs, dueRoutines)),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
@@ -539,17 +593,19 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _header(ThemeData theme, List<_Doc> docs) {
+  Widget _header(ThemeData theme, List<_Doc> docs, int routinesDue) {
     final now = DateTime.now();
     final today = docs.where((d) {
       final when = (d.data()['when'] as Timestamp?)?.toDate();
       return when != null && when.year == now.year && when.month == now.month && when.day == now.day;
     }).length;
-    final subtitle = docs.isEmpty
-        ? 'What’s on your mind?'
+    final reminders = docs.isEmpty
+        ? null
         : today > 0
         ? '$today today · ${docs.length} total'
         : '${docs.length} reminder${docs.length == 1 ? '' : 's'} on my radar';
+    final routines = routinesDue == 0 ? null : '$routinesDue routine${routinesDue == 1 ? '' : 's'} today';
+    final subtitle = [?routines, ?reminders].join(' · ');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -558,7 +614,7 @@ class _HomeScreenState extends State<HomeScreen> {
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 250),
           child: Text(
-            subtitle,
+            subtitle.isEmpty ? 'What’s on your mind?' : subtitle,
             key: ValueKey(subtitle),
             style: theme.textTheme.titleMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
@@ -567,7 +623,39 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _upNext(ThemeData theme, List<_Doc> docs) {
+  Widget _routineRow(_Doc doc) {
+    final r = Routine(doc.id, doc.data());
+    void hide() => setState(() => _hiddenRoutines[doc.id] = r.nextDue);
+    return Padding(
+      key: ValueKey('routine-${doc.id}'),
+      padding: const EdgeInsets.only(bottom: 10),
+      child: SwipeableReminder(
+        key: ValueKey('swipe-routine-${doc.id}'),
+        deleteLabel: 'Skip',
+        deleteIcon: Icons.skip_next_rounded,
+        onPrimary: () {
+          hide();
+          markRoutineDone(context, doc);
+        },
+        onDelete: () {
+          hide();
+          skipRoutine(context, doc);
+        },
+        child: ReminderTile(
+          data: {'summary': r.name, 'condition': '${r.recurrence.label} · ${dueLabel(DateTime.now(), r.nextDue)}'},
+          leadingEmoji: r.emoji,
+          alert: r.isDue(DateTime.now()),
+          onTap: () => editRoutine(context, doc),
+          onToggle: () {
+            hide();
+            markRoutineDone(context, doc);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _upNext(ThemeData theme, List<_Doc> docs, List<_Doc> dueRoutines) {
     final shown = docs.take(_upNextCount).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -592,6 +680,7 @@ class _HomeScreenState extends State<HomeScreen> {
               onDismiss: () => setState(() => _pending.remove(p)),
             ),
           ),
+        for (final doc in dueRoutines) _routineRow(doc),
         for (final doc in shown)
           Padding(
             key: ValueKey(doc.id),
@@ -604,6 +693,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 data: doc.data(),
                 highlight: _highlight.contains(doc.id),
                 onTap: () => _edit(doc),
+                onClearNotified: () => clearNotified(doc),
                 onToggle: () => _complete(doc),
               ),
             ),
