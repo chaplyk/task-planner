@@ -168,7 +168,11 @@ Suggestion? _parseTime(String s, DateTime now) {
   }
 
   // "at 6", "at 6:30pm", "at 18:00"
-  final at = RegExp(r'\b(?:at|by|@)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?(?=\W|$)').firstMatch(s);
+  // Not a street address: "meet Sam at 5 Main Street".
+  final at = RegExp(
+    r'\b(?:at|by|@)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?(?=\W|$)'
+    r'(?!\s+\w+\s+(?:street|st|avenue|ave|road|rd|boulevard|blvd|lane|ln|drive|dr|way|place|square)\b)',
+  ).firstMatch(s);
   if (at != null) {
     var h = int.parse(at.group(1)!);
     final m = int.tryParse(at.group(2) ?? '') ?? 0;
@@ -241,8 +245,10 @@ Suggestion? _parseTime(String s, DateTime now) {
 
 Suggestion? _parseActivity(String s) {
   for (final MapEntry(key: activity, value: pattern) in _activityPatterns.entries) {
+    // The lead-in ("next time I", "when I", "while") is required: a bare "walk the dog"
+    // or "run the dishwasher" is the task itself, not a trigger.
     final m = RegExp(
-      r'\b(?:(?:the\s+)?next\s+time\s+(?:i\s+)?(?:am\s+|go\s+|start\s+)?|when(?:ever)?\s+i(?:\s+am|\s+go|\s+start|\s+get\s+in(?:to)?\s+(?:the\s+|my\s+)?)?\s*|while\s+(?:i\s+am\s+)?|in\s+the\s+)?(?:' +
+      r'\b(?:(?:the\s+)?next\s+time\s+(?:i\s+)?(?:am\s+|go\s+|start\s+)?|when(?:ever)?\s+i(?:\s+am|\s+go|\s+start|\s+get\s+in(?:to)?\s+(?:the\s+|my\s+)?)?\s*|while\s+(?:i\s+am\s+)?|in\s+the\s+)(?:' +
           pattern +
           r')\b',
     ).firstMatch(s);
@@ -267,7 +273,7 @@ List<Suggestion> _parseLocations(String s, List<String> places) {
     if (result.any((r) => r.location == key)) continue;
     final keywords = [...value.keywords]..sort((a, b) => b.length.compareTo(a.length));
     for (final k in keywords) {
-      final m = RegExp(r'\b' + RegExp.escape(k) + r'\b').firstMatch(s);
+      final m = RegExp(r'\b' + RegExp.escape(k) + r'\b').allMatches(s).where((m) => _isStorePlace(s, m)).firstOrNull;
       if (m == null) continue;
       final overlapsSaved = result.any((r) => r.spans.any((sp) => m.start < sp.$2 && sp.$1 < m.end));
       if (!overlapsSaved) result.add(_placeSuggestion(s, m, key));
@@ -275,6 +281,25 @@ List<Suggestion> _parseLocations(String s, List<String> places) {
     }
   }
   return result;
+}
+
+const _article = r'(?:the\s+|a\s+|an\s+|my\s+)?$';
+
+/// "at the", "leaving the": the store keyword right after it is somewhere to be.
+final _storeLead = RegExp(
+  r'\b(?:at|in|inside|near|from|leave|leaving|exit|exiting|out\s+of|pass|passing|reach)\s+' + _article,
+);
+
+/// "when I get to the", "next time I am near a": a condition that ends at the store keyword.
+final _storeCondition = RegExp(
+  r'\b(?:when(?:ever)?|next\s+time|once|as\s+soon\s+as)\s+i\b[^.,;]*?\s' + _article,
+);
+
+/// Whether a store keyword is used as a place ("at the supermarket") rather than
+/// as part of the task ("buy groceries", "call the pharmacy", "the stock market").
+bool _isStorePlace(String s, RegExpMatch m) {
+  final before = s.substring(0, m.start);
+  return _storeLead.hasMatch(before) || _storeCondition.hasMatch(before);
 }
 
 Suggestion _placeSuggestion(String s, RegExpMatch m, String location) {

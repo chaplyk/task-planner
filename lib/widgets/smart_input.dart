@@ -21,6 +21,7 @@ class SmartDraft {
     this.ai,
     this.needsRefine = false,
     this.categoryManual = false,
+    this.category,
     this.listManual = false,
     this.list,
   });
@@ -36,8 +37,9 @@ class SmartDraft {
   /// The summary/category came from local rules; refine them with AI in the background.
   final bool needsRefine;
 
-  /// The user picked the category by hand, so refinement must not change it.
+  /// The user picked the category by hand ([category]), so AI must not change it.
   final bool categoryManual;
+  final String? category;
 
   /// The user picked the list by hand ([list], null = Inbox); it wins over the AI's choice.
   final bool listManual;
@@ -131,6 +133,8 @@ class SmartInputState extends State<SmartInput> {
   /// is clear (locally or from AI); otherwise leaves it with suggestions.
   Future<void> setTranscript(String text) async {
     _controller.text = text;
+    // Setting the text scheduled a live AI request; this method makes its own, so one is enough.
+    _aiTimer?.cancel();
     if (_localTriggers(text).isNotEmpty) {
       _send();
       return;
@@ -218,6 +222,9 @@ class SmartInputState extends State<SmartInput> {
     setState(() {});
     _aiTimer?.cancel();
     if (!widget.liveAi || text.length < _aiMinLength || _aiCache.containsKey(text)) return;
+    // A trigger found locally is already shown as a chip; AI then only polishes the
+    // wording, which happens once after sending instead of on every pause in typing.
+    if (_localTriggers(text).isNotEmpty) return;
     _aiTimer = Timer(_aiDelay, () async {
       if (!mounted || _text != text) return;
       setState(() => _aiBusy = true);
@@ -240,9 +247,10 @@ class SmartInputState extends State<SmartInput> {
     final category = _category;
 
     SmartDraft draft;
-    if (trigger != null) {
-      final spans = _local(text).expand((s) => s.spans);
-      final when = trigger.kind == SuggestionKind.time ? trigger.when : null;
+    // Removing the trigger chip is a decision too: save with no trigger instead of letting AI add one back.
+    if (trigger != null || _triggerCleared) {
+      final spans = trigger == null ? const <(int, int)>[] : _local(text).expand((s) => s.spans);
+      final when = trigger?.kind == SuggestionKind.time ? trigger?.when : null;
       draft = SmartDraft(
         text: text,
         needsRefine: ai == null,
@@ -252,19 +260,26 @@ class SmartInputState extends State<SmartInput> {
         reminder: Reminder(
           summary: ai?.summary ?? cleanSummary(text, spans),
           when: when,
-          condition: when != null ? formatReminderWhen(context, when) : trigger.condition,
+          condition: when != null ? formatReminderWhen(context, when) : trigger?.condition,
           transcript: text,
-          triggerType: trigger.triggerType,
-          activity: trigger.activity,
-          location: trigger.location,
-          locationEvent: trigger.locationEvent,
+          triggerType: trigger?.triggerType ?? 'none',
+          activity: trigger?.activity,
+          location: trigger?.location,
+          locationEvent: trigger?.locationEvent,
           category: category ?? ai?.category ?? 'other',
           list: _list,
           confidence: 1.0,
         ),
       );
     } else {
-      draft = SmartDraft(text: text, ai: ai, listManual: _listChosen, list: _list);
+      draft = SmartDraft(
+        text: text,
+        ai: ai,
+        categoryManual: _manualCategory != null,
+        category: _manualCategory,
+        listManual: _listChosen,
+        list: _list,
+      );
     }
 
     _aiTimer?.cancel();

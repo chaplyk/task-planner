@@ -20,10 +20,12 @@ const _activityLabels = {
 String formatReminderWhen(BuildContext context, DateTime when) {
   final l10n = MaterialLocalizations.of(context);
   final now = DateTime.now();
-  final today = DateTime(now.year, now.month, now.day);
-  final day = DateTime(when.year, when.month, when.day);
+  // UTC dates, so a 23-hour daylight-saving day still counts as one day.
+  final today = DateTime.utc(now.year, now.month, now.day);
+  final day = DateTime.utc(when.year, when.month, when.day);
   final time = l10n.formatTimeOfDay(TimeOfDay.fromDateTime(when));
   final dayLabel = switch (day.difference(today).inDays) {
+    -1 => 'Yesterday',
     0 => 'Today',
     1 => 'Tomorrow',
     _ => l10n.formatMediumDate(when),

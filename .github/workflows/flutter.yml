@@ -32,6 +32,9 @@ jobs:
       - name: Analyze the code
         run: flutter analyze
 
+      - name: Run unit tests
+        run: flutter test
+
       - name: Decode google-services.json
         run: echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 -d > android/app/google-services.json
 
@@ -44,7 +47,7 @@ jobs:
       - name: Build
         run: flutter build apk
 
-      - name: Run tests
+      - name: Run Test Lab suite
         uses: w9jds/firebase-action@master
         with:
           args: --debug apptesting:execute --app=1:354833570442:android:8ded6af77bac9d6039ab73  --test-dir=./tests ./build/app/outputs/apk/release/app-release.apk

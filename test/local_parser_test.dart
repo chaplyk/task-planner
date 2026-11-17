@@ -90,6 +90,35 @@ void main() {
     });
   });
 
+  group('words that are the task, not a trigger', () {
+    test('activity words without a lead-in', () {
+      expect(_trigger('Remind me to walk the dog'), isNull);
+      expect(_trigger('run the dishwasher'), isNull);
+      expect(_trigger('buy a car seat for the baby'), isNull);
+      expect(_trigger('go for a run tomorrow at 7am')!.kind, SuggestionKind.time);
+    });
+
+    test('store words that are not a place to be', () {
+      expect(_trigger('buy groceries'), isNull);
+      expect(_trigger('check the stock market'), isNull);
+      expect(_trigger('fix the hardware issue on my laptop'), isNull);
+      expect(_trigger('call the pharmacy about my prescription'), isNull);
+      expect(_trigger('go to the pharmacy'), isNull);
+    });
+
+    test('store words after a condition still count', () {
+      expect(_trigger('buy milk when I get to the supermarket')!.location, 'grocery');
+      final leave = _trigger('call mom when I leave the pharmacy')!;
+      expect(leave.location, 'pharmacy');
+      expect(leave.locationEvent, 'exit');
+    });
+
+    test('a street number is not a time', () {
+      expect(_trigger('meet Sam at 5 Main Street'), isNull);
+      expect(_trigger('meet Sam at 5')!.when, DateTime(2026, 11, 16, 17));
+    });
+  });
+
   test('no trigger', () {
     expect(_trigger('pay bills'), isNull);
   });

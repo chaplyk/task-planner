@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
@@ -22,17 +25,20 @@ class ReminderExtractor {
   String locations = '';
   List<String> _lists = const [];
 
+  // The user's category, place and list names, kept current by listeners. Fetching
+  // them for every extraction cost three Firestore queries per call, and with live
+  // suggestions a call happens on every pause in typing.
+  _Names? _categoryNames, _locationNames, _listNames;
+
   Future<Reminder?> extract(String transcript) async {
     if (transcript.trim().isEmpty) return null;
 
-    final categoryDocs = await categoriesCollection().get();
-    categories = categoryDocs.docs.map((doc) => doc['name'] as String).join(', ');
-
-    final locationDocs = await locationsCollection().get();
-    locations = locationDocs.docs.map((doc) => doc['name'] as String).join(', ');
-
-    final listDocs = await listsCollection().get();
-    _lists = [for (final d in listDocs.docs) d['name'] as String];
+    final categoryNames = _categoryNames ??= _Names(categoriesCollection());
+    final locationNames = _locationNames ??= _Names(locationsCollection());
+    final listNames = _listNames ??= _Names(listsCollection());
+    categories = (await categoryNames.get()).join(', ');
+    locations = (await locationNames.get()).join(', ');
+    _lists = await listNames.get();
 
     final output = await _generate(_prompt(transcript));
     debugPrint('Model output: $output');
@@ -42,10 +48,12 @@ class ReminderExtractor {
         Exception('LLM extraction error'),
         StackTrace.current,
         reason: 'Reminder extraction failed',
+        // No reminder text or model output: they are the user's private content.
         information: [
           'backend: ${activeBackendNotifier.value}',
-          'transcript: $transcript',
-          'model output: $output',
+          'transcript length: ${transcript.length}',
+          'model output length: ${output.length}',
+          'model output has JSON: ${output.contains('{')}',
         ],
       );
     }
@@ -110,7 +118,13 @@ class ReminderExtractor {
     _localModel = null;
   }
 
-  Future<void> close() => _closeLocal();
+  Future<void> close() async {
+    for (final names in [_categoryNames, _locationNames, _listNames]) {
+      await names?.close();
+    }
+    _categoryNames = _locationNames = _listNames = null;
+    await _closeLocal();
+  }
 
   // "grocery" (any supermarket, ...), "hardware" (...), "pharmacy" (...)
   static final _storeTypesPrompt = storeTypes.entries.map((e) => '"${e.key}" (${e.value.aiHint})').join(', ');
@@ -155,4 +169,32 @@ class ReminderExtractor {
       'The "confidence" is low when when it is vague or meaningless.\n\n'
 
       'Reminder: "$transcript"\n';
+}
+
+/// The `name` of every document in a collection, kept up to date by a listener.
+class _Names {
+  _Names(CollectionReference<Map<String, dynamic>> collection) {
+    _sub = collection.snapshots().listen(
+      (s) {
+        _names = [for (final d in s.docs) d.data()['name'] as String? ?? ''].where((n) => n.isNotEmpty).toList();
+        if (!_loaded.isCompleted) _loaded.complete();
+      },
+      onError: (Object e) {
+        debugPrint('Loading names failed: $e');
+        if (!_loaded.isCompleted) _loaded.complete();
+      },
+    );
+  }
+
+  late final StreamSubscription<QuerySnapshot<Map<String, dynamic>>> _sub;
+  final _loaded = Completer<void>();
+  List<String> _names = const [];
+
+  /// The current names; waits only for the first load.
+  Future<List<String>> get() async {
+    await _loaded.future;
+    return _names;
+  }
+
+  Future<void> close() => _sub.cancel();
 }

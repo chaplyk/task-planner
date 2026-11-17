@@ -3,6 +3,8 @@ import 'package:material_ui/material_ui.dart';
 
 import '../collections.dart';
 import '../lists.dart';
+import '../models/reminder.dart';
+import '../permissions.dart';
 import '../reminders_repo.dart';
 import '../widgets/reminder_composer.dart';
 import '../widgets/reminder_tile.dart';
@@ -27,6 +29,7 @@ class _ListsScreenState extends State<ListsScreen> {
   int _page = 0;
   bool _todoOpen = true;
   bool _doneOpen = true;
+  bool _askedNotifications = false;
 
   // Rows swiped or ticked away, per section; hidden right away so a Dismissible never lingers in the tree.
   final _hiddenOpen = <String>{};
@@ -113,14 +116,28 @@ class _ListsScreenState extends State<ListsScreen> {
 
   Future<void> _edit(_Doc doc) async {
     final updated = await showReminderComposer(context, initial: reminderFromDoc(doc), title: 'Edit task');
-    if (updated != null) await updateReminder(doc, updated);
+    if (updated == null) return;
+    await updateReminder(doc, updated);
+    if (mounted) await _prepare(updated);
   }
 
   Future<void> _addTask(String? list) async {
     final reminder = await showReminderComposer(context, title: 'New task', list: list);
     if (reminder == null) return;
     await saveReminder(reminder);
-    if (mounted) _snack('Added to ${reminder.list ?? inboxName}');
+    if (!mounted) return;
+    _snack('Added to ${reminder.list ?? inboxName}');
+    await _prepare(reminder);
+  }
+
+  /// A reminder with a trigger only fires with its permission, the background
+  /// service and notifications in place, same as one created on the Home tab.
+  Future<void> _prepare(Reminder reminder) async {
+    if (reminder.triggerType == 'none') return;
+    await prepareTrigger(context, reminder);
+    if (!mounted || _askedNotifications) return;
+    _askedNotifications = true;
+    await primeNotifications(context);
   }
 
   Future<String?> _askName({required String title, String initial = '', required String action}) =>

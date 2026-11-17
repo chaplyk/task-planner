@@ -1,18 +1,26 @@
+import 'dart:async';
+import 'dart:ui';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter_activity_recognition/flutter_activity_recognition.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app_check.dart';
 import 'notifications.dart';
 import 'collections.dart';
+import 'place_types.dart';
 import 'store_detection.dart';
 
 const _pollPeriodKey = 'poll_period_seconds';
 
-// Selectable intervals between activity checks
+// Selectable intervals between Wi-Fi and store checks
 const pollPeriods = [
   Duration(seconds: 30),
   Duration(seconds: 45),
@@ -47,6 +55,55 @@ ForegroundTaskOptions _taskOptions() => ForegroundTaskOptions(
       autoRunOnBoot: true,
     );
 
+// ---------------------------------------------------------------- activity reminders
+//
+// "Next time I drive" reminders don't use the background service. Android (Google Play
+// services) tells the app when the user starts driving, cycling, running or walking, even
+// when the app is closed: see ActivityTransitions.kt and ActivityTransitionWorker.kt.
+
+const _activityMethods = MethodChannel('activity/methods');
+const _transitionChannel = MethodChannel('activity/transition');
+
+/// Turns activity reminders on for this device. Needs the activity recognition permission.
+Future<void> enableActivityReminders() async {
+  try {
+    await _activityMethods.invokeMethod<void>('register');
+  } catch (e) {
+    debugPrint('Activity reminders could not be turned on: $e');
+  }
+}
+
+Future<void> disableActivityReminders() async {
+  try {
+    await _activityMethods.invokeMethod<void>('unregister');
+  } catch (e) {
+    debugPrint('Activity reminders could not be turned off: $e');
+  }
+}
+
+/// Started by ActivityTransitionWorker in a headless engine when the user begins an
+/// activity. Tells the worker it is ready, then shows the reminders for the activity
+/// the worker sends ('IN_VEHICLE', ...). An error here reaches the worker as a failure.
+@pragma('vm:entry-point')
+void activityTransitionMain() {
+  WidgetsFlutterBinding.ensureInitialized();
+  DartPluginRegistrant.ensureInitialized();
+  _transitionChannel.setMethodCallHandler((call) async {
+    if (call.method != 'transition') return;
+    final activity = (call.arguments as Map)['activity'] as String;
+    await Firebase.initializeApp();
+    if (FirebaseAuth.instance.currentUser == null) return;
+    await activateAppCheck();
+    await initNotifications();
+    await _checkActivityReminders(activity);
+  });
+  _transitionChannel.invokeMethod<void>('ready');
+}
+
+// ---------------------------------------------------------------- background service
+//
+// Polls for Wi-Fi place and store reminders.
+
 // The callback function should always be a top-level or static function.
 @pragma('vm:entry-point')
 void startWatchCallback() {
@@ -54,39 +111,93 @@ void startWatchCallback() {
 }
 
 class _ActivityTaskHandler extends TaskHandler {
-  ActivityType _activity = ActivityType.UNKNOWN;
   final _stores = StoreReminderWatcher();
+
+  // The place reminders still waiting to fire, kept current by one Firestore listener.
+  // Asking the server on every poll instead costs a billed read each time, even when
+  // nothing changed: thousands a day per user.
+  StreamSubscription<User?>? _authSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _waitingSub;
+  List<QueryDocumentSnapshot<Map<String, dynamic>>>? _waiting; // null until first loaded
   String? _lastWifiName;
+  bool _wifiKnown = false;
+  int _missedWifiReads = 0;
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     await Firebase.initializeApp();
     await initNotifications();
+    // Follow sign-in and sign-out: the reminders belong to the current user.
+    _authSub = FirebaseAuth.instance.authStateChanges().listen(_watchReminders);
+  }
 
-    FlutterActivityRecognition.instance.activityStream.listen((
-      activity,
-    ) {
-      _activity = activity.type;
-    });
+  void _watchReminders(User? user) {
+    _waitingSub?.cancel();
+    _waitingSub = null;
+    _waiting = null;
+    if (user == null) return;
+    _waitingSub = waitingPlaceReminders().snapshots().listen(
+      (s) => _waiting = s.docs,
+      onError: (Object e) => debugPrint('Watching place reminders failed: $e'),
+    );
   }
 
   @override
   Future<void> onRepeatEvent(DateTime timestamp) async {
-    if (FirebaseAuth.instance.currentUser == null) return;
+    final waiting = _waiting;
+    if (FirebaseAuth.instance.currentUser == null || waiting == null) return;
 
-    debugPrint('Current activity: ${_activity.name}');
-    _checkActivityReminders(_activity.name);
-    _stores.tick(timestamp).catchError((Object e) => debugPrint('Store check failed: $e'));
+    _stores.tick(timestamp, waiting).catchError((Object e) => debugPrint('Store check failed: $e'));
+    // Reading the Wi-Fi name is only needed while a saved-place reminder is waiting.
+    if (!waiting.any((d) => !isStoreType(d.data()['location'] as String?))) {
+      _wifiKnown = false; // take a fresh baseline when such a reminder appears
+      return;
+    }
+    try {
+      await _checkWifi();
+    } catch (e) {
+      debugPrint('Wi-Fi check failed: $e');
+    }
+  }
+
+  /// Fires Wi-Fi place reminders when the network really changed. A missing name
+  /// is only trusted as "left" when Android would have told us the name.
+  Future<void> _checkWifi() async {
+    // Android hides the network name without location access, and in the background
+    // without "Allow all the time". A null name then means "unknown", not "disconnected".
+    final permission = await Geolocator.checkPermission();
+    if (permission != LocationPermission.always && permission != LocationPermission.whileInUse) return;
+    if (!await Geolocator.isLocationServiceEnabled()) return;
 
     final wifiName = await NetworkInfo().getWifiName();
-    if (wifiName == _lastWifiName) return;
-    if (_lastWifiName != null) _checkWifiReminders(_lastWifiName, 'exit');
+    if (wifiName == null && permission != LocationPermission.always) return;
+
+    if (!_wifiKnown) {
+      // First reading after the service (re)starts: where the user already is, not an arrival.
+      _wifiKnown = true;
+      _lastWifiName = wifiName;
+      return;
+    }
+    if (wifiName == _lastWifiName) {
+      _missedWifiReads = 0;
+      return;
+    }
+    // A brief drop is not leaving: the network must stay gone for a second poll.
+    if (wifiName == null && ++_missedWifiReads < 2) return;
+    _missedWifiReads = 0;
+
+    final previous = _lastWifiName;
     _lastWifiName = wifiName;
-    if (wifiName != null) _checkWifiReminders(wifiName, 'enter');
+    final waiting = _waiting ?? const [];
+    if (previous != null) await _checkWifiReminders(previous, 'exit', waiting);
+    if (wifiName != null) await _checkWifiReminders(wifiName, 'enter', waiting);
   }
 
   @override
-  Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {}
+  Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
+    await _waitingSub?.cancel();
+    await _authSub?.cancel();
+  }
 }
 
 Future<void> _checkActivityReminders(String activity) async {
@@ -102,21 +213,20 @@ Future<void> _checkActivityReminders(String activity) async {
   }
 }
 
-Future<void> _checkWifiReminders(String? wifiName, String event) async {
+/// Fires the [waiting] reminders tied to the saved place whose Wi-Fi network is [wifiName].
+Future<void> _checkWifiReminders(
+  String wifiName,
+  String event,
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> waiting,
+) async {
   final wifiLocationDoc = await locationsCollection().where('wifi', isEqualTo: wifiName).limit(1).get();
   if (wifiLocationDoc.docs.isEmpty) return;
   final locationName = wifiLocationDoc.docs.first.data()['name'];
 
-  final snapshot = await remindersCollection()
-      .where('status', isEqualTo: 0)
-      .where('location', isEqualTo: locationName)
-      .where('locationEvent', isEqualTo: event)
-      .where('notified', isEqualTo: false)
-      .get();
-
-  for (final doc in snapshot.docs) {
+  for (final doc in waiting) {
+    if (doc.data()['location'] != locationName || doc.data()['locationEvent'] != event) continue;
     await showNotification(int.parse(doc.id), doc.data()['summary'] ?? 'Reminder');
-    await doc.reference.update({'notified': true});
+    sendWrite(doc.reference.update({'notified': true}));
   }
 }
 

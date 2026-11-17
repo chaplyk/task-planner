@@ -36,7 +36,9 @@ Future<void> scheduleNotification(int id, String summary, DateTime when) async {
       title: 'Reminder',
       body: summary,
     ),
-    schedule: NotificationCalendar.fromDate(date: when),
+    // Fire on time even in Doze. Exact timing needs the "Alarms & reminders" access;
+    // without it Android still delivers while idle, just within its own window.
+    schedule: NotificationCalendar.fromDate(date: when, allowWhileIdle: true, preciseAlarm: true),
   );
   debugPrint('Scheduled "$summary" for $when');
 }

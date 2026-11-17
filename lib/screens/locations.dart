@@ -120,27 +120,50 @@ Future<String?> addPlace(BuildContext context, {String? initialName}) async {
   );
 
   if (type == 'wifi' && wifi != null) {
-    await locationsCollection().add({'name': name, 'wifi': wifi});
+    sendWrite(locationsCollection().doc().set({'name': name, 'wifi': wifi}));
     return name;
   }
   if (type == 'gps' && position != null) {
-    final doc = await locationsCollection().add({
+    final doc = locationsCollection().doc();
+    sendWrite(doc.set({
       'name': name,
       'latitude': position.latitude,
       'longitude': position.longitude,
-    });
-    final zone = Geofence(
-      id: doc.id,
-      location: Location(latitude: position.latitude, longitude: position.longitude),
-      radiusMeters: 75, // minimum recommended minimum 100-150, will adjust later
-      triggers: {GeofenceEvent.enter, GeofenceEvent.exit},
-      iosSettings: IosGeofenceSettings(),
-      androidSettings: AndroidGeofenceSettings(initialTriggers: {}),
-    );
-    await NativeGeofenceManager.instance.createGeofence(zone, geofenceTriggered);
+    }));
+    await _registerGeofence(doc.id, position.latitude, position.longitude);
     return name;
   }
   return null;
+}
+
+Future<void> _registerGeofence(String id, double latitude, double longitude) {
+  final zone = Geofence(
+    id: id,
+    location: Location(latitude: latitude, longitude: longitude),
+    radiusMeters: 75, // minimum recommended minimum 100-150, will adjust later
+    triggers: {GeofenceEvent.enter, GeofenceEvent.exit},
+    iosSettings: IosGeofenceSettings(),
+    androidSettings: AndroidGeofenceSettings(initialTriggers: {}),
+  );
+  return NativeGeofenceManager.instance.createGeofence(zone, geofenceTriggered);
+}
+
+/// Registers the geofences of saved GPS places that this device doesn't watch yet.
+/// Geofences live on the device, so they are missing after signing in again or on
+/// another phone, or after a reinstall.
+Future<void> syncGeofences() async {
+  try {
+    final places = await locationsCollection().get();
+    final registered = (await NativeGeofenceManager.instance.getRegisteredGeofenceIds()).toSet();
+    for (final doc in places.docs) {
+      final lat = doc.data()['latitude'], lng = doc.data()['longitude'];
+      if (lat is! num || lng is! num || registered.contains(doc.id)) continue;
+      await _registerGeofence(doc.id, lat.toDouble(), lng.toDouble());
+    }
+  } catch (e) {
+    // Most likely no location permission yet; it is asked for when a place reminder is saved.
+    debugPrint('Geofence sync failed: $e');
+  }
 }
 
 class LocationsScreen extends StatelessWidget {
@@ -148,7 +171,7 @@ class LocationsScreen extends StatelessWidget {
 
   Future<void> _deleteLocation(DocumentReference doc) async {
     await NativeGeofenceManager.instance.removeGeofenceById(doc.id); // TO ADD: do not remove for wifi location
-    await doc.delete();
+    sendWrite(doc.delete());
   }
 
   @override

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -133,6 +134,10 @@ class StayTracker {
   DateTime? _since;
   bool _checked = false;
   int _attempts = 0;
+  int _stayId = 0;
+
+  /// Changes every time the user moves to a new area, so callers can tell a stay has ended.
+  int get stayId => _stayId;
 
   /// Feeds a new position fix. Returns true once per stay, when it should be checked.
   bool update(Position p, DateTime now) {
@@ -141,6 +146,7 @@ class StayTracker {
         Geolocator.distanceBetween(anchor.latitude, anchor.longitude, p.latitude, p.longitude) <=
             max(areaRadius, p.accuracy);
     if (!sameArea) {
+      _stayId++;
       _anchor = p;
       _since = now;
       _checked = false;
@@ -166,21 +172,34 @@ class StayTracker {
   }
 }
 
+/// Open place reminders that have not fired yet: what the background service watches for.
+Query<Map<String, dynamic>> waitingPlaceReminders() => remindersCollection()
+    .where('status', isEqualTo: 0)
+    .where('triggerType', isEqualTo: 'location')
+    .where('notified', isEqualTo: false);
+
 /// Background check for "at the grocery store" style reminders. Cheap when idle:
 /// no position fix unless such a reminder is waiting, no lookup unless the
 /// user has stayed in one area for [StayTracker.threshold].
 class StoreReminderWatcher {
   final _stay = StayTracker();
 
-  Future<void> tick(DateTime now) async {
-    final waiting = await remindersCollection()
-        .where('status', isEqualTo: 0)
-        .where('triggerType', isEqualTo: 'location')
-        .where('notified', isEqualTo: false)
-        .get();
-    final storeDocs = waiting.docs.where((d) => isStoreType(d.data()['location'] as String?)).toList();
+  /// Kinds of stores found at the current stay (key -> store name), kept so
+  /// "when I leave" reminders can fire once the user moves on.
+  var _here = <String, String>{};
+  int _hereStay = -1;
+
+  Future<void> _notify(QueryDocumentSnapshot<Map<String, dynamic>> doc, String storeName) async {
+    await showNotification(int.parse(doc.id), '${doc.data()['summary'] ?? 'Reminder'} · $storeName');
+    sendWrite(doc.reference.update({'notified': true}));
+  }
+
+  /// [waiting] is the open, not yet notified place reminders (see [waitingPlaceReminders]).
+  Future<void> tick(DateTime now, List<QueryDocumentSnapshot<Map<String, dynamic>>> waiting) async {
+    final storeDocs = waiting.where((d) => isStoreType(d.data()['location'] as String?)).toList();
     if (storeDocs.isEmpty) {
       _stay.reset();
+      _here = {};
       return;
     }
 
@@ -197,7 +216,17 @@ class StoreReminderWatcher {
       return;
     }
 
-    if (!_stay.update(position, now)) return;
+    final due = _stay.update(position, now);
+    if (_here.isNotEmpty && _stay.stayId != _hereStay) {
+      // The user has moved away from the stores found earlier: fire the "when I leave" reminders.
+      final left = _here;
+      _here = {};
+      for (final doc in storeDocs) {
+        final name = left[doc.data()['location']];
+        if (doc.data()['locationEvent'] == 'exit' && name != null) await _notify(doc, name);
+      }
+    }
+    if (!due) return;
     if (!await _takeDailyCall()) {
       debugPrint('Store check: daily lookup cap reached');
       return;
@@ -211,12 +240,17 @@ class StoreReminderWatcher {
     }
     debugPrint('Store check: ${stores.map((s) => '${s.name} ${s.distance.round()}m ${s.storeKeys}').join(', ')}');
 
+    _here = {
+      for (final key in wanted)
+        if (stores.where((s) => s.storeKeys.contains(key)).firstOrNull case final store?) key: store.name,
+    };
+    _hereStay = _stay.stayId;
+
     for (final doc in storeDocs) {
-      final key = doc.data()['location'] as String;
-      final store = stores.where((s) => s.storeKeys.contains(key)).firstOrNull;
-      if (store == null) continue;
-      await showNotification(int.parse(doc.id), '${doc.data()['summary'] ?? 'Reminder'} · ${store.name}');
-      await doc.reference.update({'notified': true});
+      final name = _here[doc.data()['location']];
+      // "When I leave" reminders wait until this stay ends (see above).
+      if (name == null || doc.data()['locationEvent'] == 'exit') continue;
+      await _notify(doc, name);
     }
   }
 }

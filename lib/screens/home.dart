@@ -67,21 +67,20 @@ class _HomeScreenState extends State<HomeScreen> {
     _events.receiveBroadcastStream().listen(_onEvent);
     _rescheduleAllNotifications();
     _maybeStartWatch();
+    syncGeofences();
   }
 
   @override
   void dispose() {
     _recordingTimer?.cancel();
+    _extractor.close();
     super.dispose();
   }
 
-  // Background watching is only needed for activity and Wi-Fi place reminders.
-  // Starts silently if the user already granted the permission or has such reminders.
+  // Restores what background reminders need on this device: activity events (they are
+  // lost on reinstall) and, only if a place reminder is waiting, the watching service.
   Future<void> _maybeStartWatch() async {
-    if (await Permission.activityRecognition.isGranted) {
-      await startWatch();
-      return;
-    }
+    if (await Permission.activityRecognition.isGranted) await enableActivityReminders();
     final places = await remindersCollection()
         .where('status', isEqualTo: 0)
         .where('triggerType', isEqualTo: 'location')
@@ -94,8 +93,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final snapshot = await remindersCollection().where('status', isEqualTo: 0).get();
     for (final doc in snapshot.docs) {
       final when = doc.data()['when'] as Timestamp?;
-      if (when == null) continue;
-      await scheduleNotification(int.parse(doc.id), doc.data()['summary'], when.toDate());
+      if (when == null || doc.data()['triggerType'] != 'time') continue;
+      await scheduleNotification(int.parse(doc.id), doc.data()['summary'] as String? ?? 'Reminder', when.toDate());
     }
   }
 
@@ -150,7 +149,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final ready = draft.reminder;
     if (ready == null) {
       final listOverride = draft.listManual ? (list: draft.list) : null;
-      await _process(draft.text, source: source, prefetched: draft.ai, listOverride: listOverride);
+      await _process(
+        draft.text,
+        source: source,
+        prefetched: draft.ai,
+        listOverride: listOverride,
+        categoryOverride: draft.categoryManual ? draft.category : null,
+      );
       return;
     }
     final id = await _commit(ready, source: source);
@@ -193,6 +198,7 @@ class _HomeScreenState extends State<HomeScreen> {
     required String source,
     Reminder? prefetched,
     ({String? list})? listOverride,
+    String? categoryOverride,
   }) async {
     final pending = _Pending(text);
     setState(() => _pending.insert(0, pending));
@@ -217,6 +223,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     if (listOverride != null) reminder = reminder.withList(listOverride.list);
+    if (categoryOverride != null) reminder = reminder.withCategory(categoryOverride);
     if ((reminder.confidence ?? 0) < 0.7) {
       reminder = await showQuickCheck(context, reminder);
       if (reminder == null) {
@@ -366,16 +373,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _askContextualPermissions(Reminder reminder) async {
-    switch (reminder.triggerType) {
-      case 'activity':
-        if (await ensureActivityPermission(context)) await startWatch();
-      case 'location':
-        // Store reminders are found by position in the background, which needs "Allow all the time".
-        if (isStoreType(reminder.location)) await requestBackgroundLocationPermission(context);
-        await startWatch();
-      default:
-        break;
-    }
+    await prepareTrigger(context, reminder);
     if (!mounted || _askedNotificationsThisSession) return;
     _askedNotificationsThisSession = true;
     final when = reminder.when;
@@ -419,7 +417,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _edit(_Doc doc) async {
     final updated = await showReminderComposer(context, initial: reminderFromDoc(doc), title: 'Edit reminder');
-    if (updated != null) await updateReminder(doc, updated);
+    if (updated == null) return;
+    await updateReminder(doc, updated);
+    if (mounted) await prepareTrigger(context, updated);
   }
 
   void _snack(String text, {String? action, VoidCallback? onAction}) {

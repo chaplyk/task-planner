@@ -63,4 +63,7 @@ flutter {
 dependencies {
     implementation("com.google.mlkit:genai-speech-recognition:1.0.0-alpha1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.0")
+    // Activity reminders: transition events (ActivityTransitions) handled in a background worker.
+    implementation("com.google.android.gms:play-services-location:21.3.0")
+    implementation("androidx.work:work-runtime-ktx:2.11.0")
 }

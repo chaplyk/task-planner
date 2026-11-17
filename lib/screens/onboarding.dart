@@ -26,13 +26,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   int _page = 0;
 
+  /// Gives a new account its starter category. A returning user already has
+  /// categories, so signing in again must not add another "personal".
+  Future<void> _seedCategories() async {
+    if ((await categoriesCollection().limit(1).get()).docs.isNotEmpty) return;
+    await categoriesCollection().add({'name': 'personal', 'emoji': '🧑', 'color': randomCategoryColor()});
+  }
+
   Future<void> _signIn() async {
     try {
       final account = await GoogleSignIn.instance.authenticate();
       await FirebaseAuth.instance.signInWithCredential(
         GoogleAuthProvider.credential(idToken: account.authentication.idToken),
       );
-      await categoriesCollection().add({'name': 'personal', 'emoji': '🧑', 'color': randomCategoryColor()}); // add safeguard later
+      await _seedCategories();
       await FirebaseAnalytics.instance.logEvent(name: 'login', parameters: {'method': 'google'});
     } catch (e) {
       FirebaseCrashlytics.instance.recordError(e, StackTrace.current, reason: 'Google Sign In failed');
@@ -43,7 +50,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _continueAsGuest() async {
     try {
       await FirebaseAuth.instance.signInAnonymously();
-      await categoriesCollection().add({'name': 'personal', 'emoji': '🧑', 'color': randomCategoryColor()}); // add safeguard later
+      await _seedCategories();
       await FirebaseAnalytics.instance.logEvent(name: 'login', parameters: {'method': 'anonymous'});
     } catch (e) {
       FirebaseCrashlytics.instance.recordError(e, StackTrace.current, reason: 'Anonymous Sign In failed');

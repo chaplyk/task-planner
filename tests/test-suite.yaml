@@ -3,4 +3,4 @@ tests:
   id: login-as-guest
   steps:
   - goal: Log in as a guest
-    finalScreenAssertion: Model download screen is visible
+    finalScreenAssertion: Home screen with the "Remind me to…" input is visible

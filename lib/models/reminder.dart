@@ -50,17 +50,41 @@ class Reminder {
     notified: notified,
   );
 
-  // Parse a decoded JSON map
+  /// Same reminder with another category.
+  Reminder withCategory(String? category) => Reminder(
+    summary: summary,
+    when: when,
+    condition: condition,
+    transcript: transcript,
+    triggerType: triggerType,
+    activity: activity,
+    location: location,
+    locationEvent: locationEvent,
+    category: category,
+    list: list,
+    confidence: confidence,
+    notified: notified,
+  );
+
+  // Parse a decoded JSON map. Model output is untrusted: any field may be missing or of the wrong type.
   factory Reminder.fromJson(Map<String, dynamic> json, {String? transcript}) {
+    String? text(String key) {
+      final v = json[key];
+      return v is String && v.trim().isNotEmpty ? v : null;
+    }
+
     final summary = json['summary'];
-    final when = json['when'] is String ? DateTime.tryParse(json['when']) : null;
-    final condition = json['condition'];
-    final category = json['category'];
-    final list = json['list'] is String && (json['list'] as String).trim().isNotEmpty ? json['list'] as String : null;
-    final confidence = json['confidence'];
-    final activity = activities.contains(json['activity']) ? json['activity'] : null;
-    final location = json['location'];
-    final locationEvent = ['enter', 'exit'].contains(json['locationEvent']) ? json['locationEvent']: null;
+    final parsedWhen = json['when'] is String ? DateTime.tryParse(json['when']) : null;
+    final condition = text('condition');
+    final category = text('category');
+    final list = text('list');
+    final rawConfidence = json['confidence'];
+    final confidence = rawConfidence is num ? rawConfidence.toDouble() : null; // models also write 1 for 1.0
+    final String? activity = activities.contains(json['activity']) ? json['activity'] : null;
+    final location = text('location');
+    final String? locationEvent = ['enter', 'exit'].contains(json['locationEvent']) ? json['locationEvent'] : null;
+    // An activity trigger wins over a time; keeping both would let the time be scheduled later.
+    final when = activity == null ? parsedWhen : null;
 
     String triggerType;
     if (activity != null) {
@@ -76,9 +100,7 @@ class Reminder {
     return Reminder(
       summary: summary is String ? summary : '',
       when: when,
-      condition: condition is String && condition.isNotEmpty
-          ? condition
-          : null,
+      condition: condition,
       transcript: transcript,
       triggerType: triggerType,
       activity: activity,
@@ -130,6 +152,8 @@ class Reminder {
       final reminder = Reminder.fromJson(decoded, transcript: transcript);
       return reminder.summary.isEmpty ? null : reminder;
     } on FormatException {
+      return null;
+    } on TypeError {
       return null;
     }
   }
