@@ -1,10 +1,12 @@
 // "At the grocery store" style reminders, without the user saving a place.
 //
-// 1. Every ~15 minutes the background service asks Geoapify Places for the stores of
+// 1. Every ~10 minutes the background service asks Geoapify Places for the stores of
 //    the wanted kinds within [poiSearchRadius] and keeps the nearest
 //    [maxStoreGeofences] in memory (and in SharedPreferences for the geofence isolate).
+//    No request is sent unless the user moved [lookupMoveThreshold] since the last one.
 // 2. Each store gets an Android geofence: [storeGeofenceRadius] wide, dwell after
-//    [storeDwellDelay], expiring after [storeGeofenceExpiration] unless refreshed.
+//    [storeDwellDelay], expiring after one refresh period (a developer option,
+//    [storeRefreshPeriod]) unless re-created by the next refresh.
 // 3. On DWELL, a few accurate GPS fixes must place the user at the store's
 //    coordinates (or inside its building outline) and the user must not be driving.
 //    Only then are the reminders shown. EXIT ends the visit. Categories only support
@@ -30,10 +32,34 @@ import 'place_types.dart';
 import 'store_log.dart';
 
 const poiSearchRadius = 1500.0;
-const maxStoreGeofences = 80;
+const maxStoreGeofences = 50;
 const storeGeofenceRadius = 150.0;
-const storeGeofenceExpiration = Duration(minutes: 15);
+
+/// How often the stores and their geofences are refreshed: a developer option.
+const defaultStoreRefreshMinutes = 10;
+/// Re-creating a geofence restarts its [storeDwellDelay] timer, so a refresh period
+/// must leave the dwell time to pass in between.
+const minStoreRefreshMinutes = 3;
+const maxStoreRefreshMinutes = 15;
+const _refreshMinutesKey = 'store_refresh_minutes';
 const storeDwellDelay = Duration(seconds: 120);
+
+/// The stores are looked up again only once the user is this far from the last lookup (meters).
+const lookupMoveThreshold = 150.0;
+
+/// The refresh period chosen in developer options (read fresh: the service isolate
+/// sees changes made in the app).
+Future<Duration> storeRefreshPeriod() async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.reload();
+  final minutes = prefs.getInt(_refreshMinutesKey) ?? defaultStoreRefreshMinutes;
+  return Duration(minutes: minutes.clamp(minStoreRefreshMinutes, maxStoreRefreshMinutes));
+}
+
+Future<void> setStoreRefreshMinutes(int minutes) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setInt(_refreshMinutesKey, minutes.clamp(minStoreRefreshMinutes, maxStoreRefreshMinutes));
+}
 
 /// A fix is used only if Android says it is at least this accurate (meters).
 const requiredFixAccuracy = 35.0;
@@ -63,6 +89,7 @@ const _dailyCapKey = 'store_lookups';
 const _dailyCap = 100;
 
 const _poisKey = 'store_pois';
+const _lookupKey = 'store_lookup';
 const _visitsKey = 'store_visits';
 
 // Written by ActivityTransitionReceiver.kt (as "flutter.vehicle_state" etc.).
@@ -413,6 +440,7 @@ Future<void> clearStoreState() async {
   final prefs = await SharedPreferences.getInstance();
   await prefs.remove(_poisKey);
   await prefs.remove(_visitsKey);
+  await prefs.remove(_lookupKey);
 }
 
 /// [poi] with its building outline: cached in the visit, looked up once per visit.
@@ -484,11 +512,52 @@ Future<void> storeGeofenceTriggered(GeofenceEvent event, List<String> geofenceId
 
 // ---------------------------------------------------------------- refresh (service)
 
+/// Where and for which kinds the stores were last looked up.
+class StoreLookup {
+  const StoreLookup(this.lat, this.lon, this.kinds);
+
+  final double lat, lon;
+  final Set<String> kinds;
+
+  double distanceTo(double lat, double lon) => Geolocator.distanceBetween(this.lat, this.lon, lat, lon);
+
+  Map<String, dynamic> toJson() => {'lat': lat, 'lon': lon, 'kinds': kinds.toList()};
+
+  static StoreLookup fromJson(Map<String, dynamic> j) => StoreLookup(
+    (j['lat'] as num).toDouble(),
+    (j['lon'] as num).toDouble(),
+    {...(j['kinds'] as List).cast<String>()},
+  );
+}
+
+/// Whether the stores must be looked up again: never looked up, a kind is now wanted
+/// that the last lookup didn't ask for, or the user moved [lookupMoveThreshold] away.
+bool lookupNeeded(StoreLookup? last, double lat, double lon, Set<String> wanted) =>
+    last == null || !last.kinds.containsAll(wanted) || last.distanceTo(lat, lon) > lookupMoveThreshold;
+
 /// Keeps geofences around the stores near the user. Driven by the background service
-/// every ~15 minutes while a store reminder is waiting.
+/// every [storeRefreshPeriod] while a store reminder is waiting.
 class StoreGeofencer {
   /// The stores currently watched, kept to compare positions against.
   List<StorePoi> _pois = const [];
+  StoreLookup? _last;
+  bool _restored = false;
+
+  /// After a service restart: the last lookup's stores, so it isn't repeated needlessly.
+  Future<void> _restore() async {
+    if (_restored) return;
+    _restored = true;
+    final prefs = await _freshPrefs();
+    try {
+      final raw = prefs.getString(_lookupKey);
+      if (raw == null) return;
+      _last = StoreLookup.fromJson((jsonDecode(raw) as Map).cast<String, dynamic>());
+      _pois = _loadPois(prefs).values.toList();
+    } catch (e) {
+      _last = null;
+      _pois = const [];
+    }
+  }
 
   List<StorePoi> get pois => _pois;
 
@@ -521,6 +590,17 @@ class StoreGeofencer {
       '±${position.accuracy.round()} m',
     );
 
+    await _restore();
+    final last = _last;
+    if (!lookupNeeded(last, position.latitude, position.longitude, wanted)) {
+      await storeLog(
+        'Refresh: moved ${last!.distanceTo(position.latitude, position.longitude).round()} m since last lookup '
+        '(new lookup after ${lookupMoveThreshold.round()} m), reusing ${_pois.length} stores',
+      );
+      await _syncGeofences();
+      return;
+    }
+
     List<StorePoi>? found;
     if (await _takeDailyCall()) {
       found = await fetchNearbyStores(position.latitude, position.longitude, wanted);
@@ -529,8 +609,10 @@ class StoreGeofencer {
     }
     if (found != null) {
       _pois = found;
+      _last = StoreLookup(position.latitude, position.longitude, wanted);
       final prefs = await _freshPrefs();
       await prefs.setString(_poisKey, jsonEncode([for (final p in found) p.toJson()]));
+      await prefs.setString(_lookupKey, jsonEncode(_last!.toJson()));
       if (found.isNotEmpty) {
         await storeLog(
           'Refresh: nearest ${found.take(3).map((p) => '${p.name} ${p.distanceTo(position.latitude, position.longitude).round()} m').join(', ')}',
@@ -543,10 +625,11 @@ class StoreGeofencer {
     await _syncGeofences();
   }
 
-  /// Registers a geofence per store (re-creating one renews its expiration) and
-  /// removes the geofences of stores no longer in the list.
+  /// Registers a geofence per store (re-creating one renews its expiration, set to one
+  /// refresh period) and removes the geofences of stores no longer in the list.
   Future<void> _syncGeofences() async {
     final manager = NativeGeofenceManager.instance;
+    final expiration = await storeRefreshPeriod();
     final keep = {for (final p in _pois) p.geofenceId};
     var removed = 0;
     try {
@@ -563,7 +646,7 @@ class StoreGeofencer {
     String? error;
     for (final poi in _pois) {
       try {
-        await manager.createGeofence(_geofenceFor(poi), geofenceTriggered);
+        await manager.createGeofence(_geofenceFor(poi, expiration), geofenceTriggered);
         ok++;
       } catch (e) {
         error ??= '$e';
@@ -571,7 +654,7 @@ class StoreGeofencer {
     }
     await storeLog(
       'Geofences: $ok/${_pois.length} registered (${storeGeofenceRadius.round()} m, '
-      'expire ${storeGeofenceExpiration.inMinutes} min, dwell ${storeDwellDelay.inSeconds} s), '
+      'expire ${expiration.inMinutes} min, dwell ${storeDwellDelay.inSeconds} s), '
       '$removed removed${error == null ? '' : ', error: $error'}',
     );
   }
@@ -594,20 +677,21 @@ class StoreGeofencer {
       await storeLog('No store reminders waiting: $removed store geofences removed');
     }
     _pois = const [];
+    _last = null;
     await clearStoreState();
   }
 }
 
-Geofence _geofenceFor(StorePoi poi) => Geofence(
+Geofence _geofenceFor(StorePoi poi, Duration expiration) => Geofence(
   id: poi.geofenceId,
   location: Location(latitude: poi.lat, longitude: poi.lon),
   radiusMeters: storeGeofenceRadius,
   triggers: {GeofenceEvent.enter, GeofenceEvent.dwell, GeofenceEvent.exit},
   iosSettings: const IosGeofenceSettings(),
-  androidSettings: const AndroidGeofenceSettings(
+  androidSettings: AndroidGeofenceSettings(
     // Re-creating a geofence the user is already inside must still lead to a DWELL.
-    initialTriggers: {GeofenceEvent.dwell},
-    expiration: storeGeofenceExpiration,
+    initialTriggers: const {GeofenceEvent.dwell},
+    expiration: expiration,
     loiteringDelay: storeDwellDelay,
   ),
 );

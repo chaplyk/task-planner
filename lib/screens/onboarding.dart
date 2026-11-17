@@ -5,7 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../collections.dart';
-import 'categories.dart';
+import '../settings/categories.dart';
 import '../widgets/typewriter.dart';
 
 const _pageColors = [

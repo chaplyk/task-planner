@@ -20,18 +20,24 @@ import 'place_types.dart';
 import 'store_detection.dart';
 import 'store_log.dart';
 
-/// How often the stores near the user are looked up again and their geofences renewed
-/// (they expire after [storeGeofenceExpiration]). Visits themselves are noticed by the
-/// geofences, not by polling. Wi-Fi places follow network change events.
-const _storeCheckPeriod = Duration(minutes: 15);
-
 /// A Wi-Fi drop must last this long to count as leaving (routers and phones blip).
 const _wifiLossGrace = Duration(seconds: 30);
 
-ForegroundTaskOptions _taskOptions() => ForegroundTaskOptions(
-      eventAction: ForegroundTaskEventAction.repeat(_storeCheckPeriod.inMilliseconds),
+/// The service wakes every [storeRefreshPeriod] (a developer option) to look up the
+/// stores near the user again and renew their geofences. Visits themselves are noticed
+/// by the geofences, not by polling. Wi-Fi places follow network change events.
+ForegroundTaskOptions _taskOptions(Duration period) => ForegroundTaskOptions(
+      eventAction: ForegroundTaskEventAction.repeat(period.inMilliseconds),
       autoRunOnBoot: true,
     );
+
+/// Applies a changed [storeRefreshPeriod] to the running service, if any.
+Future<void> applyStoreRefreshPeriod() async {
+  if (!await FlutterForegroundTask.isRunningService) return;
+  final period = await storeRefreshPeriod();
+  await FlutterForegroundTask.updateService(foregroundTaskOptions: _taskOptions(period));
+  FlutterForegroundTask.sendDataToTask('refresh');
+}
 
 // ---------------------------------------------------------------- activity reminders
 //
@@ -81,7 +87,7 @@ void activityTransitionMain() {
 // ---------------------------------------------------------------- background service
 //
 // Runs only while a place reminder is waiting. Wi-Fi places react to network change
-// events; store reminders refresh the nearby stores' geofences every [_storeCheckPeriod].
+// events; store reminders refresh the nearby stores' geofences every [storeRefreshPeriod].
 
 // The callback function should always be a top-level or static function.
 @pragma('vm:entry-point')
@@ -131,7 +137,7 @@ class _ActivityTaskHandler extends TaskHandler {
       (s) {
         _waiting = s.docs;
         // A store kind added or gone (or the first load): refresh now rather than at
-        // the next repeat event, up to [_storeCheckPeriod] away.
+        // the next repeat event, up to [storeRefreshPeriod] away.
         if (!setEquals(_storeKindsOf(s.docs), _storeKinds)) _refreshStores();
         if (!_hasWifiPlaces) {
           _wifiKnown = false; // take a fresh baseline when such a reminder appears
@@ -157,6 +163,12 @@ class _ActivityTaskHandler extends TaskHandler {
 
   @override
   Future<void> onRepeatEvent(DateTime timestamp) => _refreshStores();
+
+  /// The app changed the refresh period (developer options): apply it right away.
+  @override
+  void onReceiveData(Object data) {
+    if (data == 'refresh') _refreshStores();
+  }
 
   Future<void> _refreshStores() async {
     final waiting = _waiting;
@@ -278,7 +290,7 @@ Future<void> startWatch() async {
       channelName: 'Reminders Watch',
     ),
     iosNotificationOptions: const IOSNotificationOptions(),
-    foregroundTaskOptions: _taskOptions(),
+    foregroundTaskOptions: _taskOptions(await storeRefreshPeriod()),
   );
 
   await FlutterForegroundTask.startService(

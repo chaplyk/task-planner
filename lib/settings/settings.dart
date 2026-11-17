@@ -1,18 +1,13 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../account.dart';
 import '../collections.dart';
-import '../gemma/download.dart';
-import '../llm/extractor.dart';
-import '../llm/model_choice.dart';
-import '../theme_choice.dart';
 import 'categories.dart';
+import 'developer_options.dart';
 import 'locations.dart';
-import 'model.dart';
-import 'store_debug.dart';
+import 'theme_choice.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -23,6 +18,26 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _packageInfo = PackageInfo.fromPlatform();
+
+  /// Taps on the version that turn on developer options.
+  static const _tapsToUnlock = 3;
+  int _versionTaps = 0;
+
+  Future<void> _onVersionTap() async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (developerOptionsNotifier.value) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('Developer options are already on')));
+      return;
+    }
+    if (++_versionTaps < _tapsToUnlock) return;
+    _versionTaps = 0;
+    await setDeveloperOptions(true);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('Developer options are on')));
+  }
   Future<void> _deleteAccount() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -97,24 +112,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
       children: [
-        ValueListenableBuilder<LlmModel>(
-          valueListenable: modelChoiceNotifier,
-          builder: (context, model, _) => ListTile(
-            title: const Text('Model'),
-            subtitle: ValueListenableBuilder<int?>(
-              valueListenable: localModelDownload,
-              builder: (context, percent, _) => Text(
-                percent == null ? modelLabel(model) : 'Downloading on-device model... $percent%',
-              ),
-            ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const ModelScreen()),
-            ),
-          ),
-        ),
-        const Divider(),
         StreamBuilder(
           stream: categoriesCollection().snapshots(),
           builder: (context, snapshot) {
@@ -160,13 +157,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: _pickThemeMode,
           ),
         ),
-        if (kDebugMode)
-          ListTile(
-            leading: const Icon(Icons.storefront_outlined),
-            title: const Text('Where am I? (debug)'),
-            subtitle: const Text('Test store detection here and see its log'),
-            onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const StoreDebugScreen())),
-          ),
+        ValueListenableBuilder<bool>(
+          valueListenable: developerOptionsNotifier,
+          builder: (context, enabled, _) => !enabled
+              ? const SizedBox.shrink()
+              : Column(
+                  children: [
+                    const Divider(),
+                    ListTile(
+                      leading: const Icon(Icons.developer_mode_outlined),
+                      title: const Text('Developer options'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(builder: (_) => const DeveloperOptionsScreen()),
+                      ),
+                    ),
+                  ],
+                ),
+        ),
         const Divider(),
         if (FirebaseAuth.instance.currentUser?.isAnonymous == false)
           ListTile(
@@ -180,20 +189,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: const Text('Delete account', style: TextStyle(color: Colors.red)),
         ),
         SizedBox(height: 24),
-        ValueListenableBuilder<String>(
-          valueListenable: activeBackendNotifier,
-          builder: (context, backend, _) => Text(
-            'Inference: $backend',
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
-          ),
-        ),
         FutureBuilder<PackageInfo>(
           future: _packageInfo,
-          builder: (context, snapshot) => Text(
-            snapshot.hasData ? 'Version ${snapshot.data!.version}+${snapshot.data!.buildNumber}' : '',
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
+          builder: (context, snapshot) => GestureDetector(
+            // Three taps turn on developer options.
+            onTap: _onVersionTap,
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                snapshot.hasData ? 'Version ${snapshot.data!.version}+${snapshot.data!.buildNumber}' : '',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ),
           ),
         ),
       ],

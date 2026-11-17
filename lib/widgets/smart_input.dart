@@ -11,7 +11,7 @@ import '../models/recurrence.dart';
 import '../models/reminder.dart';
 import '../permissions.dart';
 import '../place_types.dart';
-import '../screens/locations.dart';
+import '../settings/locations.dart';
 import 'reminder_composer.dart';
 import 'routine_sheet.dart';
 

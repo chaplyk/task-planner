@@ -22,7 +22,7 @@ import '../recurring_repo.dart';
 import '../reminders_repo.dart';
 import '../store_detection.dart';
 import '../widgets/celebration.dart';
-import 'locations.dart';
+import '../settings/locations.dart';
 import 'routines.dart';
 import '../widgets/quick_check_sheet.dart';
 import '../widgets/reminder_composer.dart';

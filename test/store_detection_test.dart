@@ -94,7 +94,7 @@ void main() {
       expect(q['categories'], isNot(contains('supermarket')));
       expect(q['filter'], 'circle:30.000000,50.000000,1500');
       expect(q['bias'], 'proximity:30.000000,50.000000');
-      expect(q['limit'], '80');
+      expect(q['limit'], '50');
       expect(q['apiKey'], 'k');
     });
 
@@ -137,15 +137,15 @@ void main() {
       expect(Bounds.ofGeometry({'type': 'Point', 'coordinates': [30.0, 50.0]}), isNull);
     });
 
-    test('keeps the 80 nearest stores', () {
+    test('keeps the 50 nearest stores', () {
       final pois = [
         for (var i = 100; i > 0; i--)
           StorePoi(placeId: 'p$i', name: 's$i', lat: 50.0 + i * 0.0001, lon: 30.0, storeKeys: const {'grocery'}),
       ];
       final kept = nearestPois(pois, 50.0, 30.0);
-      expect(kept, hasLength(80));
+      expect(kept, hasLength(50));
       expect(kept.first.placeId, 'p1');
-      expect(kept.last.placeId, 'p80');
+      expect(kept.last.placeId, 'p50');
     });
 
     test('stores survive a JSON round trip', () {
@@ -154,6 +154,33 @@ void main() {
       expect(back.id, _hyper.id);
       expect(back.storeKeys, {'grocery'});
       expect(back.bounds!.maxLon, 30.0014);
+    });
+  });
+
+  group('lookupNeeded', () {
+    const last = StoreLookup(50.0, 30.0, {'grocery', 'pharmacy'});
+
+    test('first time', () {
+      expect(lookupNeeded(null, 50.0, 30.0, {'grocery'}), isTrue);
+    });
+
+    test('not after moving less than 150 m', () {
+      expect(lookupNeeded(last, 50.0009, 30.0, {'grocery'}), isFalse); // ~100 m
+    });
+
+    test('after moving more than 150 m', () {
+      expect(lookupNeeded(last, 50.0018, 30.0, {'grocery'}), isTrue); // ~200 m
+    });
+
+    test('when a kind is added, not when one is gone', () {
+      expect(lookupNeeded(last, 50.0, 30.0, {'grocery', 'hardware'}), isTrue);
+      expect(lookupNeeded(last, 50.0, 30.0, {'pharmacy'}), isFalse);
+    });
+
+    test('survives a JSON round trip', () {
+      final back = StoreLookup.fromJson(last.toJson());
+      expect([back.lat, back.lon], [50.0, 30.0]);
+      expect(back.kinds, {'grocery', 'pharmacy'});
     });
   });
 }

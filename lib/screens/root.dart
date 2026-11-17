@@ -3,7 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import 'home.dart';
 import 'lists_screen.dart';
 import 'routines.dart';
-import 'settings.dart';
+import '../settings/settings.dart';
 
 // base screen with bottom navigation
 class RootScreen extends StatefulWidget {
