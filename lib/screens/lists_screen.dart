@@ -45,6 +45,7 @@ class _ListsScreenState extends State<ListsScreen> {
 
   List<_Doc> _visible(AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>> snap, Set<String> hidden) {
     final docs = snap.data?.docs ?? <_Doc>[];
+    backfillEmoji(docs);
     if (snap.hasData) {
       final ids = {for (final d in docs) d.id};
       hidden.removeWhere((id) => !ids.contains(id));
@@ -62,7 +63,7 @@ class _ListsScreenState extends State<ListsScreen> {
   ];
 
   List<_Doc> _sortOpen(List<_Doc> docs) {
-    DateTime? when(_Doc d) => d.data()['triggerType'] == 'time' ? (d.data()['when'] as Timestamp?)?.toDate() : null;
+    DateTime? when(_Doc d) => d.data()['triggerType'] == 'time' ? reminderStart(d.data()) : null;
     DateTime created(_Doc d) =>
         (d.data()['createdAt'] as Timestamp?)?.toDate() ?? DateTime.fromMillisecondsSinceEpoch(0);
     return docs.toList()..sort((a, b) {
@@ -406,6 +407,7 @@ class _ListsScreenState extends State<ListsScreen> {
           data: doc.data(),
           done: done,
           onTap: () => _edit(doc),
+          onClearNotified: () => clearNotified(doc),
           onToggle: () => done ? _reopen(doc) : _complete(doc),
         ),
       ),

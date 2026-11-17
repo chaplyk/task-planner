@@ -131,13 +131,15 @@ class ReminderExtractor {
 
   String _prompt(String transcript) =>
       'Extract the task from the reminder into '
-      '{"summary": "...", "when": null, "condition": null, "activity": null, '
-      '"location": null, "locationEvent": null, "category": null, "list": null, "confidence": 0.0}.\n'
+      '{"summary": "...", "from": null, "to": null, "condition": null, "activity": null, '
+      '"location": null, "locationEvent": null, "category": null, "list": null, "repeat": null, "emoji": "", "confidence": 0.0}.\n'
       'The summary is short and imperative, without any time or place.\n'
 
-      'If time mentioned, fill the "when" accordingly.\n'
+      'If a time is mentioned, "from" is when it starts.\n'
       'Today is ${DateTime.now().toIso8601String()}.\n'
-      'The "when" is an ISO 8601 datetime, for example "2026-04-20T09:00:00".\n'
+      '"from" and "to" are ISO 8601 datetimes, for example "2026-04-20T09:00:00".\n'
+      '"to" is when it ends, only if an end time, range or duration is mentioned '
+      '(for example "from 2 to 3 pm", "between 5 and 7", "Monday to Wednesday", "for 2 hours"). Otherwise "to" is null.\n'
 
       'The "activity" represents what the user must be doing to trigger reminder. '
       'The "activity" is one of ${activities.join(', ')}. '
@@ -153,7 +155,13 @@ class ReminderExtractor {
 
       'The "locationEvent" can be "enter" or "exit". '
       'When a location is set, use "enter" unless the user talks about leaving. '
+      'Kinds of store only work with "enter": if the user talks about leaving one, '
+      'use the place name as the user said it instead of the kind of store. '
       'Use null if the reminder is not tied to a location.\n'
+
+      'If the task repeats (for example "every day", "weekly", "every 2 weeks", "every monday"), set "repeat" to '
+      '{"every": N, "unit": "hour" or "day" or "week" or "month"}, and put the first time it is due in "from" if one is mentioned. '
+      'Otherwise "repeat" is null.\n'
 
       'The "condition" is the time or activity as said in the reminder. '
       'For example "tomorrow afternoon" or "next time I drive".\n'
@@ -164,6 +172,8 @@ class ReminderExtractor {
       '${_lists.isEmpty ? 'The "list" is null.' : 'The "list" is the user\'s list this task belongs in, one of: ${_lists.map((l) => '"$l"').join(', ')}. '
           'Pick the list whose purpose best fits the task, for example groceries go in a shopping list. '
           'Use null if no list clearly fits.'}\n'
+
+      'The "emoji" is one emoji that best pictures the task, for example "🌱" for watering plants.\n'
 
       'The "confidence" is how useful this reminder is from 0.0 to 1.0.\n'
       'The "confidence" is low when when it is vague or meaningless.\n\n'

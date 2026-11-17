@@ -34,3 +34,7 @@ CollectionReference<Map<String, dynamic>> locationsCollection() {
 CollectionReference<Map<String, dynamic>> listsCollection() {
   return userDoc().collection('lists');
 }
+
+CollectionReference<Map<String, dynamic>> recurringCollection() {
+  return userDoc().collection('recurring');
+}

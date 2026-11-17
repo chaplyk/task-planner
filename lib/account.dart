@@ -7,7 +7,9 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:native_geofence/native_geofence.dart';
 
 import 'activity_watch.dart';
+import 'calendar_sync.dart';
 import 'collections.dart';
+import 'store_detection.dart';
 
 /// Removes everything this device does on behalf of the signed-in user: scheduled
 /// notifications, place geofences, activity events and the background service. Without this they
@@ -23,6 +25,8 @@ Future<void> clearDeviceState() async {
 
   await step('notifications', AwesomeNotifications().cancelAll);
   await step('geofences', NativeGeofenceManager.instance.removeAllGeofences);
+  await step('nearby stores', clearStoreState);
+  await step('calendar', disableCalendarSync);
   await step('activity events', disableActivityReminders);
   await step('service', () async {
     if (await FlutterForegroundTask.isRunningService) await FlutterForegroundTask.stopService();
@@ -38,7 +42,7 @@ Future<void> signOut() async {
 /// Deletes every document the user owns. The account itself holds no other data.
 Future<void> _deleteUserData() async {
   final db = FirebaseFirestore.instance;
-  for (final collection in [remindersCollection(), categoriesCollection(), locationsCollection(), listsCollection()]) {
+  for (final collection in [remindersCollection(), categoriesCollection(), locationsCollection(), listsCollection(), recurringCollection()]) {
     final docs = (await collection.get()).docs;
     // A batch takes at most 500 writes.
     for (var i = 0; i < docs.length; i += 400) {

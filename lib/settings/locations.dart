@@ -1,49 +1,16 @@
 // ignore_for_file: use_build_context_synchronously
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:native_geofence/native_geofence.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 
 import '../collections.dart';
-import '../notifications.dart';
+import '../geofence_callback.dart';
 import '../permissions.dart';
 import '../widgets/text_input_dialog.dart';
 
 const maxPlaces = 10;
-
-@pragma('vm:entry-point')
-Future<void> geofenceTriggered(GeofenceCallbackParams params) async {
-  debugPrint('Geofence triggered with params: $params');
-
-  await Firebase.initializeApp();
-  for (final geofence in params.geofences) {
-    final locationDoc = await locationsCollection().doc(geofence.id).get();
-    final locationName = locationDoc.data()?['name'];
-
-    String event;
-    if (params.event == GeofenceEvent.enter) {
-      event = "enter";
-    } else if (params.event == GeofenceEvent.exit) {
-      event = "exit";
-    } else {
-      return;
-    }
-
-    final snapshot = await remindersCollection()
-        .where('status', isEqualTo: 0)
-        .where('location', isEqualTo: locationName)
-        .where('locationEvent', isEqualTo: event)
-        .where('notified', isEqualTo: false)
-        .get();
-
-    for (final doc in snapshot.docs) {
-      await showNotification(int.parse(doc.id), doc.data()['summary'] ?? 'Reminder');
-      await doc.reference.update({'notified': true});
-    }
-  }
-}
 
 /// Saves the user's current position (GPS geofence) or Wi-Fi network as a named place.
 /// [initialName] pre-fills the name, e.g. a place mentioned in a reminder.

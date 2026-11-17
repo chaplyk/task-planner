@@ -48,14 +48,16 @@ class _QuickCheckState extends State<_QuickCheck> {
   }
 
   Reminder _current({
-    DateTime? when,
+    DateTime? from,
+    DateTime? to,
     String? condition,
     String? triggerType,
     String? category,
   }) =>
       Reminder(
         summary: _summary.text.trim(),
-        when: when ?? _r.when,
+        from: from ?? _r.from,
+        to: from == null ? _r.to : to,
         condition: condition ?? _r.condition,
         transcript: _r.transcript,
         triggerType: triggerType ?? _r.triggerType,
@@ -65,6 +67,8 @@ class _QuickCheckState extends State<_QuickCheck> {
         category: category ?? _r.category,
         list: _r.list,
         confidence: 1.0,
+        repeat: _r.repeat,
+        emoji: _r.emoji,
       );
 
   Future<void> _editTime() async {
@@ -73,17 +77,20 @@ class _QuickCheckState extends State<_QuickCheck> {
       Navigator.pop(context, _MoreOptions(_current()));
       return;
     }
-    final picked = await pickReminderDateTime(context, _r.when);
+    final picked = await pickReminderDateTime(context, _r.from);
     if (picked == null || !mounted) return;
+    // An end moves with the start, so the event keeps its length.
+    final to = _r.from != null && _r.to != null ? _r.to!.add(picked.difference(_r.from!)) : null;
     setState(() => _r = _current(
-          when: picked,
+          from: picked,
+          to: to,
           triggerType: 'time',
-          condition: formatReminderWhen(context, picked),
+          condition: formatReminderRange(context, picked, to),
         ));
   }
 
   String _triggerLabel() => switch (_r.triggerType) {
-        'time' when _r.when != null => formatReminderWhen(context, _r.when!),
+        'time' when _r.from != null => formatReminderRange(context, _r.from!, _r.to),
         'none' => 'Add a time',
         _ => _r.condition ?? 'Trigger',
       };

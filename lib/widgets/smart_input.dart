@@ -7,11 +7,13 @@ import 'package:siri_wave/siri_wave.dart';
 import '../collections.dart';
 import '../lists.dart';
 import '../llm/local_parser.dart';
+import '../models/recurrence.dart';
 import '../models/reminder.dart';
 import '../permissions.dart';
 import '../place_types.dart';
-import '../screens/locations.dart';
+import '../settings/locations.dart';
 import 'reminder_composer.dart';
+import 'routine_sheet.dart';
 
 /// What the smart input hands to the screen when the user sends.
 class SmartDraft {
@@ -164,15 +166,18 @@ class SmartInputState extends State<SmartInput> {
   List<Suggestion> _localTriggers(String text) => _local(text).where((s) => s.isTrigger).toList();
 
   List<Suggestion> _fromAi(Reminder r) => [
-    if (r.triggerType == 'time' && r.when != null)
-      Suggestion(kind: SuggestionKind.time, source: SuggestionSource.ai, when: r.when),
+    if (r.repeat != null)
+      Suggestion(kind: SuggestionKind.repeat, source: SuggestionSource.ai, repeat: r.repeat, from: r.from),
+    if (r.triggerType == 'time' && r.from != null)
+      Suggestion(kind: SuggestionKind.time, source: SuggestionSource.ai, from: r.from, to: r.to),
     if (r.triggerType == 'activity' && r.activity != null)
       Suggestion(kind: SuggestionKind.activity, source: SuggestionSource.ai, activity: r.activity),
     if (r.triggerType == 'location' && r.location != null)
       Suggestion(
         kind: SuggestionKind.location,
         source: SuggestionSource.ai,
-        location: storeTypeFor(r.location!) ?? r.location,
+        // Nearby categories only work on arrival: "leave the pharmacy" needs a saved place.
+        location: (r.locationEvent == 'exit' ? null : storeTypeFor(r.location!)) ?? r.location,
         locationEvent: r.locationEvent ?? 'enter',
       ),
   ];
@@ -250,7 +255,9 @@ class SmartInputState extends State<SmartInput> {
     // Removing the trigger chip is a decision too: save with no trigger instead of letting AI add one back.
     if (trigger != null || _triggerCleared) {
       final spans = trigger == null ? const <(int, int)>[] : _local(text).expand((s) => s.spans);
-      final when = trigger?.kind == SuggestionKind.time ? trigger?.when : null;
+      final repeating = trigger?.kind == SuggestionKind.repeat;
+      final from = trigger?.kind == SuggestionKind.time || repeating ? trigger?.from : null;
+      final to = trigger?.kind == SuggestionKind.time ? trigger?.to : null;
       draft = SmartDraft(
         text: text,
         needsRefine: ai == null,
@@ -259,8 +266,9 @@ class SmartInputState extends State<SmartInput> {
         list: _list,
         reminder: Reminder(
           summary: ai?.summary ?? cleanSummary(text, spans),
-          when: when,
-          condition: when != null ? formatReminderWhen(context, when) : trigger?.condition,
+          from: from,
+          to: to,
+          condition: !repeating && from != null ? formatReminderRange(context, from, to) : trigger?.condition,
           transcript: text,
           triggerType: trigger?.triggerType ?? 'none',
           activity: trigger?.activity,
@@ -269,6 +277,8 @@ class SmartInputState extends State<SmartInput> {
           category: category ?? ai?.category ?? 'other',
           list: _list,
           confidence: 1.0,
+          repeat: trigger?.repeat,
+          emoji: ai?.emoji,
         ),
       );
     } else {
@@ -293,9 +303,10 @@ class SmartInputState extends State<SmartInput> {
   Future<void> _adjust(SuggestionKind kind) async {
     final current = _selectedTrigger;
     final picked = switch (kind) {
-      SuggestionKind.time => await _pickTime(current?.when),
+      SuggestionKind.time => await _pickTime(current),
       SuggestionKind.activity => await _pickActivity(),
       SuggestionKind.location => await _pickPlace(current),
+      SuggestionKind.repeat => await _pickRepeat(current),
       SuggestionKind.category => null,
     };
     if (picked == null || !mounted) return;
@@ -305,7 +316,7 @@ class SmartInputState extends State<SmartInput> {
     });
   }
 
-  Future<Suggestion?> _pickTime(DateTime? current) async {
+  Future<Suggestion?> _pickTime(Suggestion? current) async {
     final now = DateTime.now();
     final tonight = DateTime(now.year, now.month, now.day, 20);
     final quick = <(String, DateTime)>[
@@ -334,9 +345,28 @@ class SmartInputState extends State<SmartInput> {
       ),
     );
     if (!mounted) return null;
-    final when = choice == 'custom' ? await pickReminderDateTime(context, current) : choice as DateTime?;
-    if (when == null) return null;
-    return Suggestion(kind: SuggestionKind.time, source: SuggestionSource.manual, when: when);
+    final from = choice == 'custom' ? await pickReminderDateTime(context, current?.from) : choice as DateTime?;
+    if (from == null) return null;
+    // Keep a parsed end only if it still comes after the new start.
+    final to = current?.kind == SuggestionKind.time ? current?.to : null;
+    return Suggestion(
+      kind: SuggestionKind.time,
+      source: SuggestionSource.manual,
+      from: from,
+      to: to != null && to.isAfter(from) ? to : null,
+    );
+  }
+
+  Future<Suggestion?> _pickRepeat(Suggestion? current) async {
+    final previous = current?.kind == SuggestionKind.repeat ? current : null;
+    final repeat = await pickRecurrence(context, current: previous?.repeat);
+    if (repeat == null) return null;
+    return Suggestion(
+      kind: SuggestionKind.repeat,
+      source: SuggestionSource.manual,
+      repeat: repeat.withMode(previous?.repeat?.mode ?? Recurrence.modeDone),
+      from: previous?.from,
+    );
   }
 
   Future<Suggestion?> _pickActivity() async {
@@ -379,16 +409,17 @@ class SmartInputState extends State<SmartInput> {
               onSelectionChanged: (s) => setSheet(() => event = s.first),
             ),
             const SizedBox(height: 16),
-            const PlaceSectionHeader('Nearby stores'),
+            const PlaceSectionHeader('Nearby categories'),
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
+                // Nearby categories only work on arrival.
                 for (final MapEntry(:key, :value) in storeTypes.entries)
                   ActionChip(
                     avatar: Text(value.emoji),
                     label: Text(_capitalize(value.label)),
-                    onPressed: () => Navigator.pop(context, key),
+                    onPressed: event == 'exit' ? null : () => Navigator.pop(context, key),
                   ),
               ],
             ),
@@ -503,7 +534,7 @@ class SmartInputState extends State<SmartInput> {
   };
 
   String _triggerLabel(Suggestion s) => switch (s.kind) {
-    SuggestionKind.time => formatReminderWhen(context, s.when!),
+    SuggestionKind.time => formatReminderRange(context, s.from!, s.to),
     SuggestionKind.activity => switch (s.activity) {
       'IN_VEHICLE' => 'Next drive',
       'ON_BICYCLE' => 'Next ride',
@@ -512,10 +543,11 @@ class SmartInputState extends State<SmartInput> {
     },
     SuggestionKind.location =>
       isStoreType(s.location)
-          ? _capitalize(storeCondition(s.location!, s.locationEvent))
+          ? _capitalize(storeCondition(s.location!))
           : s.locationEvent == 'exit'
           ? 'Leaving ${s.location}'
           : 'Arriving ${s.location}',
+    SuggestionKind.repeat => s.from == null ? s.repeat!.label : '${s.repeat!.label} · from ${formatReminderFrom(context, s.from!)}',
     SuggestionKind.category => s.category ?? '',
   };
 
@@ -635,6 +667,11 @@ class SmartInputState extends State<SmartInput> {
           avatar: const Text('📍'),
           label: const Text('Place'),
           onPressed: () => _adjust(SuggestionKind.location),
+        ),
+        ActionChip(
+          avatar: const Text('🔁'),
+          label: const Text('Repeat'),
+          onPressed: () => _adjust(SuggestionKind.repeat),
         ),
       ],
       for (final alt in alternatives)

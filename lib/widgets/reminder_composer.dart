@@ -2,10 +2,12 @@ import 'package:material_ui/material_ui.dart';
 
 import '../collections.dart';
 import '../lists.dart';
+import '../llm/emoji.dart';
 import '../models/reminder.dart';
 import '../permissions.dart';
 import '../place_types.dart';
-import '../screens/locations.dart';
+import '../settings/locations.dart';
+import 'emoji_picker_sheet.dart';
 
 enum _Trigger { time, activity, location, none }
 
@@ -16,21 +18,33 @@ const _activityLabels = {
   'WALKING': ('🚶', 'Walking', 'next time I walk'),
 };
 
-/// "Today at 6:00 PM", "Tomorrow at 9:00 AM", "Mar 3, 2027 at 8:00 AM".
-String formatReminderWhen(BuildContext context, DateTime when) {
-  final l10n = MaterialLocalizations.of(context);
-  final now = DateTime.now();
+/// "Today", "Tomorrow", "Yesterday", or "Mar 3, 2027".
+String _dayLabel(BuildContext context, DateTime at, {DateTime? now}) {
+  final n = now ?? DateTime.now();
   // UTC dates, so a 23-hour daylight-saving day still counts as one day.
-  final today = DateTime.utc(now.year, now.month, now.day);
-  final day = DateTime.utc(when.year, when.month, when.day);
-  final time = l10n.formatTimeOfDay(TimeOfDay.fromDateTime(when));
-  final dayLabel = switch (day.difference(today).inDays) {
+  final today = DateTime.utc(n.year, n.month, n.day);
+  final day = DateTime.utc(at.year, at.month, at.day);
+  return switch (day.difference(today).inDays) {
     -1 => 'Yesterday',
     0 => 'Today',
     1 => 'Tomorrow',
-    _ => l10n.formatMediumDate(when),
+    _ => MaterialLocalizations.of(context).formatMediumDate(at),
   };
-  return '$dayLabel at $time';
+}
+
+String _time(BuildContext context, DateTime at) =>
+    MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(at));
+
+/// "Today at 6:00 PM", "Tomorrow at 9:00 AM", "Mar 3, 2027 at 8:00 AM".
+String formatReminderFrom(BuildContext context, DateTime from, {DateTime? now}) =>
+    '${_dayLabel(context, from, now: now)} at ${_time(context, from)}';
+
+/// A start, or a start and end: "Today at 2:00 PM – 3:00 PM", "Tomorrow at 9:00 AM – Nov 20, 2026 at 6:00 PM".
+String formatReminderRange(BuildContext context, DateTime from, DateTime? to, {DateTime? now}) {
+  final start = formatReminderFrom(context, from, now: now);
+  if (to == null) return start;
+  final sameDay = from.year == to.year && from.month == to.month && from.day == to.day;
+  return '$start – ${sameDay ? _time(context, to) : formatReminderFrom(context, to, now: now)}';
 }
 
 /// Date picker followed by a time picker. Returns null if either is dismissed.
@@ -85,14 +99,25 @@ class _ComposerState extends State<_Composer> {
     'activity' => _Trigger.activity,
     'location' => _Trigger.location,
     'none' => _Trigger.none,
-    _ => widget.initial?.when != null || widget.initial == null ? _Trigger.time : _Trigger.none,
+    _ => widget.initial?.from != null ? _Trigger.time : _Trigger.none,
   };
-  late DateTime? _when = widget.initial?.when;
+  late DateTime? _from = widget.initial?.from;
+  late DateTime? _to = widget.initial?.to;
   late String? _activity = widget.initial?.activity;
   late String? _location = widget.initial?.location;
   late String _locationEvent = widget.initial?.locationEvent ?? 'enter';
   late String? _category = widget.initial?.category;
   late String? _list = widget.initial?.list ?? widget.list;
+
+  // The saved or hand-picked emoji; while null a keyword guess is shown and one is picked on save.
+  late String? _emoji = widget.initial?.emoji;
+
+  String get _shownEmoji => _emoji ?? keywordEmoji(_summary.text);
+
+  Future<void> _pickEmoji() async {
+    final picked = await pickEmoji(context, current: _shownEmoji, subject: _summary.text);
+    if (picked != null && mounted) setState(() => _emoji = picked);
+  }
 
   @override
   void initState() {
@@ -109,20 +134,26 @@ class _ComposerState extends State<_Composer> {
   bool get _valid {
     if (_summary.text.trim().isEmpty) return false;
     return switch (_trigger) {
-      _Trigger.time => _when != null,
+      _Trigger.time => _from != null && !_endBeforeStart,
       _Trigger.activity => _activity != null,
       _Trigger.location => _location != null,
       _Trigger.none => true,
     };
   }
 
-  String _formatWhen(DateTime when) => formatReminderWhen(context, when);
+  bool get _endBeforeStart => _from != null && _to != null && !_to!.isAfter(_from!);
+
+  /// Moves the start; an end moves with it, so the event keeps its length.
+  void _setFrom(DateTime from) => setState(() {
+        if (_from != null && _to != null) _to = _to!.add(from.difference(_from!));
+        _from = from;
+      });
 
   String? _condition() => switch (_trigger) {
-        _Trigger.time => _formatWhen(_when!),
+        _Trigger.time => formatReminderRange(context, _from!, _to),
         _Trigger.activity => _activityLabels[_activity]!.$3,
         _Trigger.location => isStoreType(_location)
-            ? storeCondition(_location!, _locationEvent)
+            ? storeCondition(_location!)
             : _locationEvent == 'enter'
             ? 'when I arrive at $_location'
             : 'when I leave $_location',
@@ -134,7 +165,8 @@ class _ComposerState extends State<_Composer> {
       context,
       Reminder(
         summary: _summary.text.trim(),
-        when: _trigger == _Trigger.time ? _when : null,
+        from: _trigger == _Trigger.time ? _from : null,
+        to: _trigger == _Trigger.time ? _to : null,
         condition: _condition(),
         transcript: widget.initial?.transcript,
         triggerType: _trigger.name,
@@ -144,13 +176,22 @@ class _ComposerState extends State<_Composer> {
         category: _category ?? 'other',
         list: _list,
         confidence: 1.0,
+        // A recurring task keeps repeating unless the user switched it to a place or activity.
+        repeat: _trigger == _Trigger.time || _trigger == _Trigger.none ? widget.initial?.repeat : null,
+        emoji: _emoji,
       ),
     );
   }
 
   Future<void> _pickDateTime() async {
-    final picked = await pickReminderDateTime(context, _when);
-    if (picked != null && mounted) setState(() => _when = picked);
+    final picked = await pickReminderDateTime(context, _from);
+    if (picked != null && mounted) _setFrom(picked);
+  }
+
+  Future<void> _pickEnd() async {
+    final from = _from ?? DateTime.now();
+    final picked = await pickReminderDateTime(context, _to ?? from.add(const Duration(hours: 1)));
+    if (picked != null && mounted) setState(() => _to = picked);
   }
 
   Future<void> _selectTrigger(_Trigger trigger) async {
@@ -171,20 +212,49 @@ class _ComposerState extends State<_Composer> {
           children: [
             Text(widget.title, style: theme.textTheme.headlineSmall),
             const SizedBox(height: 16),
-            TextField(
-              controller: _summary,
-              autofocus: widget.initial == null,
-              textCapitalization: TextCapitalization.sentences,
-              style: theme.textTheme.titleMedium,
-              decoration: InputDecoration(
-                hintText: 'What should I remind you about?',
-                filled: true,
-                fillColor: theme.colorScheme.surfaceContainerHighest,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  borderSide: BorderSide.none,
+            Row(
+              children: [
+                Tooltip(
+                  message: 'Change emoji',
+                  child: Material(
+                    color: theme.colorScheme.primaryContainer,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: _pickEmoji,
+                      child: SizedBox(
+                        width: 56,
+                        height: 56,
+                        child: Center(
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 250),
+                            transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
+                            child: Text(_shownEmoji, key: ValueKey(_shownEmoji), style: const TextStyle(fontSize: 28)),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _summary,
+                    autofocus: widget.initial == null,
+                    textCapitalization: TextCapitalization.sentences,
+                    style: theme.textTheme.titleMedium,
+                    decoration: InputDecoration(
+                      hintText: 'What should I remind you about?',
+                      filled: true,
+                      fillColor: theme.colorScheme.surfaceContainerHighest,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 24),
             _Label('When should I remind you?'),
@@ -193,7 +263,7 @@ class _ComposerState extends State<_Composer> {
               child: SegmentedButton<_Trigger>(
                 showSelectedIcon: false,
                 segments: const [
-                  ButtonSegment(value: _Trigger.none, label: Text('Anytime')),
+                  ButtonSegment(value: _Trigger.none, label: Text('No alert')),
                   ButtonSegment(value: _Trigger.time, label: Text('Time')),
                   ButtonSegment(value: _Trigger.activity, label: Text('Activity')),
                   ButtonSegment(value: _Trigger.location, label: Text('Place')),
@@ -210,14 +280,7 @@ class _ComposerState extends State<_Composer> {
                 _Trigger.time => _timeOptions(),
                 _Trigger.activity => _activityOptions(),
                 _Trigger.location => _locationOptions(),
-                _Trigger.none => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Text(
-                      'No alert — it just stays on your list.',
-                      style: theme.textTheme.bodyMedium
-                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                    ),
-                  ),
+                _Trigger.none => const SizedBox(width: double.infinity),
               },
             ),
             const SizedBox(height: 24),
@@ -263,25 +326,52 @@ class _ComposerState extends State<_Composer> {
             for (final (label, time) in quick)
               ChoiceChip(
                 label: Text(label),
-                selected: _when != null && _when!.difference(time).inMinutes.abs() < 1,
-                onSelected: (_) => setState(() => _when = time),
+                selected: _from != null && _from!.difference(time).inMinutes.abs() < 1,
+                onSelected: (_) => _setFrom(time),
               ),
             ActionChip(
               avatar: const Icon(Icons.calendar_month, size: 18),
               label: const Text('Pick…'),
               onPressed: _pickDateTime,
             ),
+            if (_from != null && _to == null)
+              ActionChip(
+                avatar: const Icon(Icons.more_time_rounded, size: 18),
+                label: const Text('Add end time'),
+                onPressed: _pickEnd,
+              ),
           ],
         ),
-        if (_when != null)
+        if (_from != null)
           Padding(
             padding: const EdgeInsets.only(top: 12),
-            child: Text(
-              '🔔 ${_formatWhen(_when!)}',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
+            child: Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: _to == null ? null : _pickEnd,
+                    child: Text(
+                      '🔔 ${formatReminderRange(context, _from!, _to)}',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                    ),
                   ),
+                ),
+                if (_to != null)
+                  IconButton(
+                    tooltip: 'Remove end time',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    onPressed: () => setState(() => _to = null),
+                  ),
+              ],
             ),
+          ),
+        if (_endBeforeStart)
+          Text(
+            'End must be after start',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.error),
           ),
       ],
     );
@@ -316,16 +406,17 @@ class _ComposerState extends State<_Composer> {
               width: double.infinity,
               child: SegmentedButton<String>(
                 showSelectedIcon: false,
-                segments: const [
-                  ButtonSegment(value: 'enter', label: Text('When I arrive')),
-                  ButtonSegment(value: 'exit', label: Text('When I leave')),
+                segments: [
+                  const ButtonSegment(value: 'enter', label: Text('When I arrive')),
+                  // Nearby categories only work on arrival.
+                  ButtonSegment(value: 'exit', label: const Text('When I leave'), enabled: !isStoreType(_location)),
                 ],
                 selected: {_locationEvent},
                 onSelectionChanged: (s) => setState(() => _locationEvent = s.first),
               ),
             ),
             const SizedBox(height: 16),
-            const PlaceSectionHeader('Nearby stores'),
+            const PlaceSectionHeader('Nearby categories'),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -334,7 +425,7 @@ class _ComposerState extends State<_Composer> {
                   ChoiceChip(
                     label: Text('${value.emoji} ${value.label}'),
                     selected: _location == key,
-                    onSelected: (_) => setState(() => _location = key),
+                    onSelected: _locationEvent == 'exit' ? null : (_) => setState(() => _location = key),
                   ),
               ],
             ),

@@ -26,7 +26,8 @@ Location is used only for place-based reminders, and only if you grant the locat
 
 - **Saved places.** When you save a place, we store the name you give it together with either its GPS coordinates or the name of the Wi-Fi network you are connected to. This is stored in our cloud database with your account.
 - **Background location.** To remind you when you arrive at or leave a saved place or a kind of store (for example "at the grocery store"), the App accesses your location in the background, including when the App is closed or not in use. Saved GPS places are watched with on-device geofences. Wi-Fi places are detected by reading the name of the network your phone is connected to.
-- **Nearby store lookups.** Only while you have an open reminder tied to a kind of store, and only after you have stayed in one area for a few minutes, the App sends your current coordinates to a public OpenStreetMap "Overpass" server to find out which stores are around you. The request contains the coordinates and a search radius; it does not contain your account, name or reminders. These servers are operated by third parties (see Data Sharing). At most 30 such lookups are made per day.
+- **Nearby store lookups.** Only while you have an open reminder tied to a kind of store, the App sends your current coordinates to Geoapify when you have moved at least 150 m since the last lookup (checked about every 10 minutes) to find the stores of that kind within about 1.5 km. When you stay near one of them, the App may also ask Geoapify for that store's building outline, using the store's ID. Requests contain the coordinates, a search radius and the kinds of store. They do not contain your account, name or reminders. At most 100 lookups are made per day. The list of nearby stores and the GPS checks that confirm a visit stay on your device.
+- **Phone calendar (optional).** If you turn on "Sync with phone calendar" in Settings, the App asks for calendar access and adds your timed reminders (their text and times) to a "NagadAI" calendar on your phone. It doesn't read your other calendars or events and sends nothing anywhere itself. Turning the option off, or signing out, deletes the NagadAI calendar from your phone.
 
 Your location history is not stored: apart from the saved places above, positions are used on the device and discarded.
 
@@ -67,7 +68,7 @@ We do not sell your personal information, and we do not use your data for advert
 We do not sell your personal information and do not share it with advertisers. Your data is shared only with the following service providers, to the extent needed to run the App:
 
 - **Google** — Firebase Authentication and Firestore (account and reminder data), Gemini via Firebase AI Logic (reminder text, when the cloud model is used), Firebase Analytics, Crashlytics, Performance Monitoring and App Check, subject to [Google's Privacy Policy](https://policies.google.com/privacy).
-- **OpenStreetMap Overpass servers** — receive your current coordinates (and, like any server, your IP address) for the nearby store lookups described above. The App tries these servers in order, using the next one only when the previous one is unavailable: `overpass-api.de` (FOSSGIS e.V., Germany), `maps.mail.ru` (VK, Russia), and `overpass.private.coffee` (Private.coffee, Austria).
+- **Geoapify** (Geoapify GmbH, Germany): receives your current coordinates (and, like any server, your IP address) for the nearby store lookups described above.
 
 ## Data Retention and Deletion
 

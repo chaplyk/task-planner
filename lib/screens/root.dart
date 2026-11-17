@@ -2,7 +2,8 @@ import 'package:material_ui/material_ui.dart';
 
 import 'home.dart';
 import 'lists_screen.dart';
-import 'settings.dart';
+import 'routines.dart';
+import '../settings/settings.dart';
 
 // base screen with bottom navigation
 class RootScreen extends StatefulWidget {
@@ -25,6 +26,7 @@ class _RootScreenState extends State<RootScreen> {
         children: [
           HomeScreen(onSeeAll: () => _select(1)),
           const ListsScreen(),
+          const RoutinesScreen(),
           const SettingsScreen(),
         ],
       ),
@@ -41,6 +43,11 @@ class _RootScreenState extends State<RootScreen> {
             icon: Icon(Icons.checklist_outlined),
             selectedIcon: Icon(Icons.checklist),
             label: 'Lists',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.autorenew_outlined),
+            selectedIcon: Icon(Icons.autorenew_rounded),
+            label: 'Routines',
           ),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined),

@@ -19,7 +19,8 @@ void main() {
 
     debugPrint('backend: ${activeBackendNotifier.value}');
     debugPrint('summary: ${reminder?.summary}');
-    debugPrint('when: ${reminder?.when}');
+    debugPrint('from: ${reminder?.from}');
+    debugPrint('to: ${reminder?.to}');
     debugPrint('when_string: ${reminder?.condition}');
 
     expect(reminder, isNotNull);
