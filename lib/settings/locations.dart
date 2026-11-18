@@ -1,6 +1,7 @@
 // ignore_for_file: use_build_context_synchronously
 import 'package:material_ui/material_ui.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:native_geofence/native_geofence.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 
@@ -9,6 +10,7 @@ import '../geofence_callback.dart';
 import '../permissions.dart';
 import '../widgets/text_input_dialog.dart';
 import 'place_details.dart';
+import 'place_picker.dart';
 
 const maxPlaces = 10;
 
@@ -137,54 +139,73 @@ Future<String?> _addPlaceOfKind(BuildContext context, PlaceKind kind, {String? i
   await requestBackgroundLocationPermission(context);
   if (!context.mounted) return null;
 
-  String? wifi;
-  Future<Position?>? positionFuture;
-  if (kind == PlaceKind.wifi) {
-    // Known at once: no point asking for a name when there's no network.
-    wifi = await NetworkInfo().getWifiName().catchError((Object e) {
-      debugPrint('Wi-Fi name unavailable: $e');
-      return null;
-    });
-    if (!context.mounted) return null;
-    if (wifi == null) {
-      snack('Connect to the Wi-Fi network you want to save first');
-      return null;
-    }
-  } else {
-    // Takes a few seconds: fetched while the user types the name.
-    positionFuture = Geolocator.getCurrentPosition().then<Position?>((p) => p).catchError((Object e) {
-      debugPrint('Position unavailable: $e');
-      return null;
-    });
-  }
+  if (kind == PlaceKind.gps) return _addPinnedPlace(context, initialName: initialName);
 
+  // Known at once: no point asking for a name when there's no network.
+  final wifi = await NetworkInfo().getWifiName().catchError((Object e) {
+    debugPrint('Wi-Fi name unavailable: $e');
+    return null;
+  });
+  if (!context.mounted) return null;
+  if (wifi == null) {
+    snack('Connect to the Wi-Fi network you want to save first');
+    return null;
+  }
+  final name = await _askPlaceName(
+    context,
+    title: 'Name the place with “${wifiDisplayName(wifi)}”',
+    initial: initialName ?? '',
+    hint: 'e.g. Home',
+  );
+  if (name == null) return null;
+  sendWrite(locationsCollection().doc().set({'name': name, 'wifi': wifi}));
+  return name;
+}
+
+/// Lets the user place a pin on a map (starting at their position), then name it.
+Future<String?> _addPinnedPlace(BuildContext context, {String? initialName}) async {
+  // Without a position, the map opens on the last saved GPS place.
+  LatLng? fallback;
+  try {
+    for (final d in (await locationsCollection().get()).docs.reversed) {
+      final lat = d.data()['latitude'], lon = d.data()['longitude'];
+      if (lat is num && lon is num) {
+        fallback = LatLng(lat.toDouble(), lon.toDouble());
+        break;
+      }
+    }
+  } catch (_) {}
+  if (!context.mounted) return null;
+  final picked = await pickPlaceOnMap(context, fallback: fallback);
+  if (picked == null || !context.mounted) return null;
+  final name = await _askPlaceName(
+    context,
+    title: 'Name this place',
+    initial: initialName ?? picked.suggestedName ?? '',
+    hint: 'e.g. Gym',
+  );
+  if (name == null) return null;
+  final doc = locationsCollection().doc();
+  sendWrite(doc.set({'name': name, 'latitude': picked.point.latitude, 'longitude': picked.point.longitude}));
+  await _registerGeofence(doc.id, picked.point.latitude, picked.point.longitude);
+  return name;
+}
+
+/// The name for a new place, trimmed; null if cancelled or left empty.
+Future<String?> _askPlaceName(BuildContext context, {required String title, required String initial, required String hint}) async {
   final name = (await showTextInputDialog(
     context,
-    title: wifi != null ? 'Name the place with “${wifiDisplayName(wifi)}”' : 'Name this place',
+    title: title,
     action: 'Save',
-    initial: initialName ?? '',
-    hintText: wifi != null ? 'e.g. Home' : 'e.g. Gym',
+    initial: initial,
+    hintText: hint,
     filledAction: true,
   ))?.trim();
   if (name == null || !context.mounted) return null;
   if (name.isEmpty) {
-    snack('Name cannot be empty');
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Name cannot be empty')));
     return null;
   }
-
-  if (wifi != null) {
-    sendWrite(locationsCollection().doc().set({'name': name, 'wifi': wifi}));
-    return name;
-  }
-  final position = await positionFuture;
-  if (!context.mounted) return null;
-  if (position == null) {
-    snack('Couldn’t get your position. Check that location is on and try again.');
-    return null;
-  }
-  final doc = locationsCollection().doc();
-  sendWrite(doc.set({'name': name, 'latitude': position.latitude, 'longitude': position.longitude}));
-  await _registerGeofence(doc.id, position.latitude, position.longitude);
   return name;
 }
 
@@ -304,17 +325,17 @@ class _LocationsScreenState extends State<LocationsScreen> {
     return StreamBuilder(
       stream: locationsCollection().snapshots(),
       builder: (context, places) {
-        // One listener for every place's reminder count.
+        // One listener for every place's reminder count, for the warning on Delete.
         return StreamBuilder(
           stream: remindersCollection()
               .where('status', isEqualTo: 0)
               .where('triggerType', isEqualTo: 'location')
               .snapshots(),
           builder: (context, reminders) {
-            final byPlace = <String, List<String>>{};
+            final byPlace = <String, int>{};
             for (final d in reminders.data?.docs ?? const []) {
               final location = d.data()['location'];
-              if (location is String) (byPlace[location] ??= []).add(d.data()['summary'] as String? ?? 'Reminder');
+              if (location is String) byPlace[location] = (byPlace[location] ?? 0) + 1;
             }
             final docs = [...?places.data?.docs]
               ..sort((a, b) => (a.data()['name'] as String? ?? '').toLowerCase().compareTo(
@@ -332,12 +353,11 @@ class _LocationsScreenState extends State<LocationsScreen> {
                 final distance = _distance(doc.data());
                 return _PlaceCard(
                   doc: doc,
-                  reminders: byPlace[name] ?? const [],
                   distance: distance,
                   onTap: () => showPlaceDetails(
                     context,
                     place: doc,
-                    reminders: byPlace[name] ?? const [],
+                    reminderCount: byPlace[name] ?? 0,
                     distance: distance,
                     onDelete: () => deletePlace(doc),
                   ),
@@ -394,7 +414,7 @@ class _AddPlaceDial extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         _option(context, 1, PlaceKind.wifi, Icons.wifi_rounded, 'Save current Wi-Fi'),
-        _option(context, 0, PlaceKind.gps, Icons.my_location_rounded, 'Save current GPS'),
+        _option(context, 0, PlaceKind.gps, Icons.add_location_alt_rounded, 'Pin on the map'),
         FloatingActionButton.extended(
           heroTag: 'add_place',
           onPressed: onToggle,
@@ -411,13 +431,12 @@ class _AddPlaceDial extends StatelessWidget {
 }
 
 class _PlaceCard extends StatelessWidget {
-  const _PlaceCard({required this.doc, required this.reminders, required this.onTap, this.distance});
+  const _PlaceCard({required this.doc, required this.onTap, this.distance});
 
   final PlaceDoc doc;
 
   /// How far the user is; the coordinates are shown while it's unknown.
   final String? distance;
-  final List<String> reminders;
   final VoidCallback onTap;
 
   @override
@@ -460,17 +479,6 @@ class _PlaceCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (reminders.isNotEmpty) ...[
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: scheme.secondaryContainer, borderRadius: BorderRadius.circular(12)),
-                  child: Text(
-                    reminders.length == 1 ? '1 reminder' : '${reminders.length} reminders',
-                    style: theme.textTheme.labelMedium?.copyWith(color: scheme.onSecondaryContainer),
-                  ),
-                ),
-              ],
               const SizedBox(width: 4),
               Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant),
             ],
