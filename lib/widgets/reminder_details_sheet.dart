@@ -65,6 +65,7 @@ Future<void> deleteReminderWithUndo(BuildContext context, ReminderDoc doc) async
       SnackBar(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         content: Text('Deleted: ${data['summary']}'),
+        persist: false, // with an action it would otherwise stay until dismissed
         action: SnackBarAction(label: 'Undo', onPressed: () => restoreReminder(doc.id, data)),
       ),
     );

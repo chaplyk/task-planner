@@ -6,13 +6,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 import '../collections.dart';
 import '../settings/categories.dart';
-import '../widgets/typewriter.dart';
-
-const _pageColors = [
-  Color.fromARGB(255, 241, 176, 79),
-  Color.fromARGB(255, 92, 132, 226),
-  Color.fromARGB(255, 251, 255, 211),
-];
+import '../widgets/onboarding_demo.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -22,10 +16,6 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  FirebaseAnalytics analytics = FirebaseAnalytics.instance;
-
-  int _page = 0;
-
   /// Gives a new account its starter category. A returning user already has
   /// categories, so signing in again must not add another "personal".
   Future<void> _seedCategories() async {
@@ -60,88 +50,51 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Scaffold(
-      body: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        color: _pageColors[_page],
-        child: Column(
-        children: [
-          Expanded(
-            child: PageView(
-              onPageChanged: (i) => setState(() => _page = i),
-              children: [
-                _Page(
-                  icon: Icons.mic,
-                  title: 'Record your thoughts',
-                  text: 'NagadAI remembers so you don\'t have to',
-                  showExamples: true,
-                ),
-                _Page(
-                  icon: Icons.auto_awesome,
-                  title: 'AI Powered',
-                  text: 'Summarize, categorize and schedule your reminders',
-                ),
-                _Page(
-                  icon: Icons.schedule,
-                  title: 'Smart reminders',
-                  text: 'Time, location, activity.. you name it.\nNagadAI will notify you when it matters',
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(24),
-            child: _page == 2
-                ? Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      GestureDetector(
-                        onTap: _signIn,
-                        child: Image.asset(
-                          'assets/images/google_signin_button.png',
-                          height: 48,
+      backgroundColor: scheme.surface,
+      body: SafeArea(
+        child: LayoutBuilder(
+          // Scrolls only on screens too short for everything; otherwise it fills the height.
+          builder: (context, box) => SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: box.maxHeight - 32),
+              child: IntrinsicHeight(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Spacer(),
+                    Text('Say it once.\nForget about it.', style: theme.textTheme.headlineLarge),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Tell NagadAI what to remember. It reminds you at the right time, place or moment.',
+                      style: theme.textTheme.bodyLarge?.copyWith(color: scheme.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 28),
+                    const OnboardingDemo(),
+                    const Spacer(flex: 2),
+                    SizedBox(
+                      width: double.infinity,
+                      child: Center(
+                        child: GestureDetector(
+                          onTap: _signIn,
+                          child: Image.asset('assets/images/google_signin_button.png', height: 48),
                         ),
                       ),
-                      TextButton(
-                        onPressed: _continueAsGuest,
-                        child: const Text('Continue as guest'),
-                      ),
-                    ],
-                  )
-                : const Text('Swipe to continue'),
+                    ),
+                    const SizedBox(height: 4),
+                    SizedBox(
+                      width: double.infinity,
+                      child: TextButton(onPressed: _continueAsGuest, child: const Text('Continue as guest')),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-        ],
         ),
-      ),
-    );
-  }
-}
-
-class _Page extends StatelessWidget {
-  const _Page({required this.icon, required this.title, this.text, this.showExamples = false});
-
-  final IconData icon;
-  final String title;
-  final String? text;
-  final bool showExamples;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 96),
-          const SizedBox(height: 32),
-          Text(title, style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 12),
-          Text(text!, textAlign: TextAlign.center),
-          if (showExamples) ...[
-            const SizedBox(height: 24),
-            const Typewriter(),
-          ],
-        ],
       ),
     );
   }

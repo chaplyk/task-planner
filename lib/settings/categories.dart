@@ -85,7 +85,8 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   void _snack(String text, {SnackBarAction? action}) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(text), action: action));
+      // With an action it would otherwise stay until dismissed.
+      ..showSnackBar(SnackBar(content: Text(text), action: action, persist: false));
   }
 
   // Give emoji to categories created before emoji existed.

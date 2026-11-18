@@ -31,7 +31,6 @@ import '../widgets/reminder_details_sheet.dart';
 import '../widgets/reminder_tile.dart';
 import '../widgets/routine_history_sheet.dart';
 import '../widgets/smart_input.dart';
-import '../widgets/typewriter.dart';
 
 typedef _Doc = QueryDocumentSnapshot<Map<String, dynamic>>;
 
@@ -388,6 +387,7 @@ class _HomeScreenState extends State<HomeScreen> {
         SnackBar(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           content: Text('🔁  Saved routine: ${reminder.summary} · ${repeat.label.toLowerCase()}'),
+          persist: false, // with an action it would otherwise stay until dismissed
           action: SnackBarAction(label: 'Undo', onPressed: () => deleteRecurringById(id)),
         ),
       );
@@ -455,6 +455,7 @@ class _HomeScreenState extends State<HomeScreen> {
         SnackBar(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           content: Text('${triggerEmoji(reminder.triggerType)}  Saved: ${reminder.summary}'),
+          persist: false, // with an action it would otherwise stay until dismissed
           action: SnackBarAction(label: 'Undo', onPressed: () => deleteReminderById(id)),
         ),
       );
@@ -494,6 +495,7 @@ class _HomeScreenState extends State<HomeScreen> {
         SnackBar(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           content: Text(text),
+          persist: false, // with an action it would otherwise stay until dismissed
           action: action == null ? null : SnackBarAction(label: action, onPressed: onAction!),
         ),
       );
@@ -730,6 +732,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
 // ------------------------------------------------------------------ empty state
 
+/// Suggestions on the empty Home, sent as "Remind me to …": one per kind of trigger.
+const examples = [
+  'call mom tomorrow',
+  'buy milk when I am in grocery store',
+  'pay bills when I get home',
+  'fuel up the car next time I am driving',
+  'water plants every sunday morning',
+];
+
 class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.onExample});
 
@@ -765,8 +776,7 @@ class _EmptyState extends StatelessWidget {
             'I’ll remind you at the right time, place or moment.',
             style: theme.textTheme.bodyLarge?.copyWith(color: scheme.onPrimaryContainer.withValues(alpha: 0.8)),
           ),
-          const SizedBox(height: 8),
-          const Typewriter(),
+          const SizedBox(height: 20),
           Text(
             'Try one, it takes a second:',
             style: theme.textTheme.labelLarge?.copyWith(color: scheme.onPrimaryContainer),
