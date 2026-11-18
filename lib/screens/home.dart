@@ -31,7 +31,6 @@ import '../widgets/reminder_details_sheet.dart';
 import '../widgets/reminder_tile.dart';
 import '../widgets/routine_history_sheet.dart';
 import '../widgets/smart_input.dart';
-import '../widgets/typewriter.dart';
 
 typedef _Doc = QueryDocumentSnapshot<Map<String, dynamic>>;
 
@@ -732,6 +731,15 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // ------------------------------------------------------------------ empty state
+
+/// Suggestions on the empty Home, sent as "Remind me to …": one per kind of trigger.
+const examples = [
+  'call mom tomorrow',
+  'buy milk when I am in grocery store',
+  'pay bills when I get home',
+  'fuel up the car next time I am driving',
+  'water plants every sunday morning',
+];
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.onExample});
