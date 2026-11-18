@@ -76,20 +76,14 @@ class _DeveloperOptionsScreenState extends State<DeveloperOptionsScreen> {
           ),
           const Divider(),
           ListTile(
-            title: const Text('Where am I? (debug)'),
-            subtitle: const Text('Test store detection here and see its log'),
+            title: const Text('Debug mode'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const StoreDebugScreen())),
           ),
           const Divider(),
           ListTile(
             title: const Text('Geofence refresh'),
-            subtitle: Text(
-              minutes == null
-                  ? ''
-                  : 'Every $minutes min, nearby stores are checked and their geofences renewed. '
-                      'Geofences expire after $minutes min.',
-            ),
+            subtitle: const Text('How often nearby stores are checked and their geofences renewed'),
             trailing: Text(minutes == null ? '' : '$minutes min'),
           ),
           if (minutes != null)

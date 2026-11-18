@@ -13,7 +13,7 @@
 //    arriving ("when I leave" can't be offered for them: see [storeCondition]).
 //
 // Every step is written to the store log (lib/store_log.dart), shown on the
-// "Where am I?" debug screen.
+// Debug log screen.
 
 import 'dart:convert';
 import 'dart:io';

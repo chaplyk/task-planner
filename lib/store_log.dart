@@ -1,4 +1,4 @@
-// A small event log for store detection, shown on the "Where am I?" debug screen.
+// A small event log for store detection and model replies, shown on the Debug log screen.
 //
 // Store detection runs in several places: the background service (refreshing stores
 // and geofences), the geofence plugin's worker (ENTER / DWELL / EXIT, GPS checks) and

@@ -10,6 +10,7 @@ import '../collections.dart';
 import '../gemma/download.dart';
 import '../models/reminder.dart';
 import '../place_types.dart';
+import '../store_log.dart';
 import 'model_choice.dart';
 
 const _systemInstruction =
@@ -42,7 +43,8 @@ class ReminderExtractor {
     _lists = await listNames.get();
 
     final output = await _generate(_prompt(transcript));
-    debugPrint('Model output: $output');
+    // Also on the Debug log screen. One line: the screen lists lines newest first.
+    unawaited(storeLog('Model (${activeBackendNotifier.value}): ${output.replaceAll(RegExp(r'\s*\n\s*'), ' ')}'));
     final reminder = _validList(Reminder.tryParse(output, transcript: transcript));
     if (reminder == null) {
       await FirebaseCrashlytics.instance.recordError(
