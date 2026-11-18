@@ -159,8 +159,12 @@ class SplashScreen extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        if (snapshot.data == null) return const OnboardingScreen();
-        return const StartupScreen();
+        final user = snapshot.data;
+        if (user == null) return const OnboardingScreen();
+        // Keyed by user: Firebase can switch straight from one user to another (a session
+        // restored on reinstall, then a sign-in), and every screen's queries and listeners
+        // were made for the old user's data. A new key rebuilds them for the new one.
+        return StartupScreen(key: ValueKey(user.uid));
       },
     );
   }
