@@ -768,8 +768,7 @@ class _EmptyState extends StatelessWidget {
             'I’ll remind you at the right time, place or moment.',
             style: theme.textTheme.bodyLarge?.copyWith(color: scheme.onPrimaryContainer.withValues(alpha: 0.8)),
           ),
-          const SizedBox(height: 8),
-          const Typewriter(),
+          const SizedBox(height: 20),
           Text(
             'Try one, it takes a second:',
             style: theme.textTheme.labelLarge?.copyWith(color: scheme.onPrimaryContainer),

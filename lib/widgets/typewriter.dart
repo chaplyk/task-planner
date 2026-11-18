@@ -1,11 +1,13 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:animated_text_kit/animated_text_kit.dart';
 
+/// Shown after "Remind me to …": the Home suggestions and the onboarding typewriter.
 const examples = [
-  'call mom when I leave office',
-  'buy dog food next time I am driving',
+  'call mom tomorrow',
+  'buy milk when I am in grocery store',
   'pay bills when I get home',
-  'do laundry tomorrow morning',
+  'fuel up the car next time I am driving',
+  'water plants every sunday morning',
 ];
 
 class Typewriter extends StatelessWidget {
