@@ -307,7 +307,7 @@ Future<void> startWatch() async {
 
   await FlutterForegroundTask.startService(
     serviceTypes: [ForegroundServiceTypes.location],
-    notificationTitle: 'Watching for your location reminders',
+    notificationTitle: 'Watching for location reminders',
     notificationText: '',
     callback: startWatchCallback,
   );
