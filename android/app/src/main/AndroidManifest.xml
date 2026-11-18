@@ -17,6 +17,12 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <uses-permission android:name="android.permission.READ_CALENDAR"/>
     <uses-permission android:name="android.permission.WRITE_CALENDAR"/>
+    <!-- network_info_plus asks for ACCESS_WIFI_STATE, which Play reads as "Wi-Fi required".
+         Only Wi-Fi places need it; without Wi-Fi the app works and just can't offer them. -->
+    <uses-feature android:name="android.hardware.wifi" android:required="false"/>
+    <!-- Reminders can be typed, and time, activity and list reminders work without location. -->
+    <uses-feature android:name="android.hardware.microphone" android:required="false"/>
+    <uses-feature android:name="android.hardware.location" android:required="false"/>
     <application
         android:label="NagadAI"
         android:name="${applicationName}"
