@@ -24,6 +24,18 @@ enum PlaceKind { gps, wifi }
 String wifiDisplayName(String raw) =>
     raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"') ? raw.substring(1, raw.length - 1) : raw;
 
+/// The Wi-Fi network the phone is on, or null when it isn't on one or the name is hidden
+/// (Android hides it without location access).
+Future<String?> currentWifiName() async {
+  try {
+    final name = await NetworkInfo().getWifiName();
+    return name == null || name.isEmpty || name.contains('<unknown ssid>') ? null : name;
+  } catch (e) {
+    debugPrint('Wi-Fi name unavailable: $e');
+    return null;
+  }
+}
+
 /// [kind] given (the Saved Locations add menu): saves the current GPS position or Wi-Fi
 /// network after asking only for a name. Without it, asks for the name, then the kind.
 Future<String?> addPlace(BuildContext context, {String? initialName, PlaceKind? kind}) async {
