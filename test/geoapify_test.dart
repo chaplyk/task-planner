@@ -3,8 +3,8 @@ import 'package:nagadai/geoapify.dart';
 
 void main() {
   test('tile URL picks the style by theme and keeps flutter_map placeholders', () {
-    expect(geoapifyTileUrl(dark: false, apiKey: 'k'), 'https://maps.geoapify.com/v1/tile/osm-bright/{z}/{x}/{y}{r}.png?apiKey=k');
-    expect(geoapifyTileUrl(dark: true, apiKey: 'k'), contains('/dark-matter/'));
+    expect(geoapifyTileUrl(dark: false, apiKey: 'k'), 'https://maps.geoapify.com/v1/tile/positron/{z}/{x}/{y}{r}.png?apiKey=k');
+    expect(geoapifyTileUrl(dark: true, apiKey: 'k'), contains('/dark-matter-dark-grey/'));
   });
 
   test('autocomplete is biased to the map centre, lon first', () {

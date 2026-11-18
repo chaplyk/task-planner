@@ -36,7 +36,7 @@ Uri staticMapUri({
   final lonLat = '${lon.toStringAsFixed(6)},${lat.toStringAsFixed(6)}';
   final hex = pin.toARGB32().toRadixString(16).padLeft(8, '0').substring(2);
   return Uri.parse('$geoapifyMapsBase/staticmap').replace(queryParameters: {
-    'style': dark ? 'dark-matter' : 'positron',
+    'style': geoapifyMapStyle(dark: dark),
     'width': '$_mapWidth',
     'height': '$_mapHeight',
     'scaleFactor': '2',

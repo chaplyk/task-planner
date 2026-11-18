@@ -17,6 +17,11 @@ typedef PickedPlace = ({LatLng point, String? suggestedName});
 /// Reminders for a saved GPS place fire within this of its pin (its geofence radius).
 const _reminderRadiusMeters = 75.0;
 
+/// How far out the map zooms once it shows a real spot: the neighbourhood around the pin on a phone.
+/// Every zoom level the user passes through is another screenful of billed Geoapify tiles,
+/// and a place is pinned up close anyway (the search finds places farther away).
+const _minZoom = 13.0;
+
 const _pinSize = 56.0;
 const _liftHeight = 22.0;
 
@@ -53,6 +58,9 @@ class _PlacePickerState extends State<_PlacePicker> with TickerProviderStateMixi
   bool _ready = false; // the map can be moved only once it's laid out
   bool _moving = false;
   bool _touched = false; // the user moved the map: stop following the first fix
+  // Without any position the map opens on the whole world, and zooming out isn't limited
+  // until the camera first gets close (a fix, a search result, or the user zooming in).
+  bool _anchored = false;
   Timer? _settle;
 
   GeocodeResult? _address;
@@ -101,6 +109,7 @@ class _PlacePickerState extends State<_PlacePicker> with TickerProviderStateMixi
     setState(() {
       _me = last;
       _start = center == null ? (center: const LatLng(30, 10), zoom: 2.5) : (center: center, zoom: 17);
+      _anchored = center != null;
       _center = _start!.center;
     });
     if (center != null) _lookUpAddress(center);
@@ -149,6 +158,7 @@ class _PlacePickerState extends State<_PlacePicker> with TickerProviderStateMixi
   void _onMapEvent(MapEvent event) {
     if (event is! MapEventWithMove) return;
     _center = event.camera.center;
+    if (!_anchored && event.camera.zoom >= _minZoom) setState(() => _anchored = true);
     if (event.source != MapEventSource.mapController) _touched = true;
     if (!_moving) {
       _moving = true;
@@ -265,7 +275,7 @@ class _PlacePickerState extends State<_PlacePicker> with TickerProviderStateMixi
             options: MapOptions(
               initialCenter: start.center,
               initialZoom: start.zoom,
-              minZoom: 2,
+              minZoom: _anchored ? _minZoom : 2,
               maxZoom: 19,
               onMapReady: () => _ready = true,
               onMapEvent: _onMapEvent,

@@ -11,9 +11,12 @@ bool get geoapifyConfigured => geoapifyApiKey.isNotEmpty;
 
 const _geocodeBase = 'https://api.geoapify.com/v1/geocode';
 
+/// The map style for both the place picker and the place details minimap.
+String geoapifyMapStyle({required bool dark}) => dark ? 'dark-matter-dark-grey' : 'positron';
+
 /// Raster map tiles for flutter_map: `{r}` becomes "@2x" on high-density screens.
 String geoapifyTileUrl({required bool dark, String apiKey = geoapifyApiKey}) =>
-    '$geoapifyMapsBase/tile/${dark ? 'dark-matter' : 'osm-bright'}/{z}/{x}/{y}{r}.png?apiKey=$apiKey';
+    '$geoapifyMapsBase/tile/${geoapifyMapStyle(dark: dark)}/{z}/{x}/{y}{r}.png?apiKey=$apiKey';
 
 /// Address suggestions for [text], ranked by closeness to [lat], [lon].
 Uri autocompleteUri(String text, {required double lat, required double lon, String apiKey = geoapifyApiKey}) =>
