@@ -156,7 +156,8 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           backgroundColor: theme.colorScheme.surface,
           body: CustomScrollView(
             slivers: [
-              SliverAppBar.large(
+              SliverAppBar(
+                pinned: true,
                 title: const Text('Categories'),
                 bottom: PreferredSize(
                   preferredSize: const Size.fromHeight(28),
