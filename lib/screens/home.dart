@@ -307,7 +307,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: FilledButton.icon(
                     style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
                     icon: const Icon(Icons.my_location_rounded),
-                    label: const Text('I’m here now: save it'),
+                    label: const Text('Add new location'),
                     onPressed: () => Navigator.pop(context, 'gps'),
                   ),
                 ),
