@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_gemma/flutter_gemma.dart';
+import 'package:flutter_edge_ai/flutter_edge_ai.dart';
 
 import '../collections.dart';
 import '../gemma/download.dart';
@@ -98,7 +98,7 @@ class ReminderExtractor {
   }
 
   Future<String> _generateLocal(String prompt) async {
-    _localModel ??= await FlutterGemma.getActiveModel(maxTokens: 1024);
+    _localModel ??= await FlutterEdgeAi.getActiveModel(maxTokens: 1024);
 
     final session = await _localModel!.createSession(
       temperature: 0.1,
