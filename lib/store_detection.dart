@@ -26,6 +26,7 @@ import 'package:native_geofence/native_geofence.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'collections.dart';
+import 'geoapify.dart';
 import 'geofence_callback.dart';
 import 'notifications.dart';
 import 'place_types.dart';
@@ -77,9 +78,6 @@ const _vehicleStateMaxAge = Duration(hours: 2);
 /// Geofence ids of stores start with this; other geofences are saved places.
 const storeGeofencePrefix = 'store:';
 
-/// Set in dart_defines.json (see the Makefile): {"GEOAPIFY_API_KEY": "..."}.
-const _geoapifyApiKey = String.fromEnvironment('GEOAPIFY_API_KEY');
-const _geoapifyBase = 'https://api.geoapify.com/v2';
 
 /// Fuel station shops count as convenience stores too; they are not grocery stores.
 const _fuelCategory = 'service.vehicle.fuel';
@@ -209,10 +207,10 @@ String _fnv1a(String s) {
 // ---------------------------------------------------------------- Geoapify
 
 /// Places API request: the wanted store kinds within [radius], nearest first.
-Uri buildPlacesUri(double lat, double lon, Set<String> storeKeys, {double radius = poiSearchRadius, String apiKey = _geoapifyApiKey}) {
+Uri buildPlacesUri(double lat, double lon, Set<String> storeKeys, {double radius = poiSearchRadius, String apiKey = geoapifyApiKey}) {
   final categories = {for (final k in storeKeys) ...storeTypes[k]!.categories};
   final lonLat = '${lon.toStringAsFixed(6)},${lat.toStringAsFixed(6)}';
-  return Uri.parse('$_geoapifyBase/places').replace(queryParameters: {
+  return Uri.parse('$geoapifyApiBase/places').replace(queryParameters: {
     'categories': categories.join(','),
     'filter': 'circle:$lonLat,${radius.round()}',
     'bias': 'proximity:$lonLat',
@@ -256,7 +254,7 @@ List<StorePoi> nearestPois(List<StorePoi> pois, double lat, double lon, {int lim
 
 /// GETs a Geoapify URL and returns the decoded JSON, or null (logged) on any failure.
 Future<Map<String, dynamic>?> _getJson(Uri uri, String what) async {
-  if (_geoapifyApiKey.isEmpty) {
+  if (geoapifyApiKey.isEmpty) {
     await storeLog('$what: no GEOAPIFY_API_KEY in dart_defines.json');
     return null;
   }
@@ -295,10 +293,10 @@ Future<List<StorePoi>?> fetchNearbyStores(double lat, double lon, Set<String> st
 /// The store's building outline from Place Details (1 credit), or null if it is
 /// mapped as a point or the lookup failed.
 Future<Bounds?> _fetchBounds(StorePoi poi) async {
-  final uri = Uri.parse('$_geoapifyBase/place-details').replace(queryParameters: {
+  final uri = Uri.parse('$geoapifyApiBase/place-details').replace(queryParameters: {
     'id': poi.placeId,
     'features': 'details',
-    'apiKey': _geoapifyApiKey,
+    'apiKey': geoapifyApiKey,
   });
   final json = await _getJson(uri, 'Place details ${poi.name}');
   for (final f in (json?['features'] as List?) ?? const []) {

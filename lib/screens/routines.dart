@@ -12,7 +12,6 @@ import '../widgets/routine_card.dart';
 import '../widgets/routine_history_sheet.dart';
 import '../widgets/routine_sheet.dart';
 
-typedef _Doc = QueryDocumentSnapshot<Map<String, dynamic>>;
 
 void _snack(BuildContext context, String text, {VoidCallback? onUndo}) {
   ScaffoldMessenger.of(context)
@@ -105,14 +104,6 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
     super.dispose();
   }
 
-  void _onAction(_Doc doc, RoutineAction action) => switch (action) {
-        RoutineAction.done => markRoutineDone(context, doc),
-        RoutineAction.history => showRoutineHistory(context, doc),
-        RoutineAction.edit => editRoutine(context, doc),
-        RoutineAction.skip => skipRoutine(context, doc),
-        RoutineAction.delete => deleteRoutine(context, doc),
-      };
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -153,7 +144,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                           routine: Routine(doc.id, doc.data()),
                           now: now,
                           onDone: () => markRoutineDone(context, doc),
-                          onAction: (a) => _onAction(doc, a),
+                          onOpen: () => showRoutineHistory(context, doc),
                         );
                       },
                     ),

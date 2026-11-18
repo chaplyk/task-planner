@@ -28,7 +28,7 @@ class _ListsScreenState extends State<ListsScreen> {
   final _tabKeys = <String, GlobalKey>{};
   int _page = 0;
   bool _todoOpen = true;
-  bool _doneOpen = true;
+  bool _doneOpen = false; // finished tasks stay out of the way until asked for
   bool _askedNotifications = false;
 
   // Rows swiped or ticked away, per section; hidden right away so a Dismissible never lingers in the tree.
