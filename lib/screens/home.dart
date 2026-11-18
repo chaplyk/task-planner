@@ -27,6 +27,7 @@ import '../settings/locations.dart';
 import 'routines.dart';
 import '../widgets/quick_check_sheet.dart';
 import '../widgets/reminder_composer.dart';
+import '../widgets/reminder_details_sheet.dart';
 import '../widgets/reminder_tile.dart';
 import '../widgets/routine_history_sheet.dart';
 import '../widgets/smart_input.dart';
@@ -459,7 +460,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  Future<void> _delete(_Doc doc) async {
+  Future<void> _delete(ReminderDoc doc) async {
     setState(() => _hidden.add(doc.id));
     final data = await deleteReminder(doc);
     if (!mounted || data == null) return;
@@ -469,7 +470,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  Future<void> _edit(_Doc doc) async {
+  Future<void> _edit(ReminderDoc doc) async {
     final updated = await showReminderComposer(context, initial: reminderFromDoc(doc), title: 'Edit reminder');
     if (updated == null) return;
     await updateReminder(doc, updated);
@@ -706,7 +707,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: ReminderTile(
                 data: doc.data(),
                 highlight: _highlight.contains(doc.id),
-                onTap: () => _edit(doc),
+                onTap: () => showReminderDetails(context, doc, onEdit: _edit, onDelete: _delete),
                 onClearNotified: () => clearNotified(doc),
                 onToggle: () => _complete(doc),
               ),

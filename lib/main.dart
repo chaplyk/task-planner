@@ -43,6 +43,7 @@ Future<void> main() async {
   await _init('developer options', loadDeveloperOptions);
   await _init('calendar sync', loadCalendarSync);
   await _init('notifications', initNotifications);
+  await _init('notification taps', listenForNotificationTaps);
   // Notification permission is asked after the first reminder, not at launch.
   await _init('geofences', () => NativeGeofenceManager.instance.initialize());
   runApp(const MyApp());

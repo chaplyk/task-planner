@@ -85,7 +85,7 @@ class Routine {
 }
 
 Future<void> _schedule(int id, String emoji, String name, DateTime due) =>
-    scheduleNotification(id, '$emoji $name'.trim(), due);
+    scheduleNotification(id, '$emoji $name'.trim(), due, kind: NotificationKind.routine);
 
 /// Creates a routine, schedules its first notification and picks an emoji for it.
 /// Returns the routine id. Without [firstDue] it is first due one interval from now.
