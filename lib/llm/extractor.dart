@@ -21,6 +21,7 @@ final activeBackendNotifier = ValueNotifier<String>('not loaded');
 class ReminderExtractor {
   InferenceModel? _localModel;
   GenerativeModel? _gemini;
+  String? _geminiId; // the model id [_gemini] was made for
   String categories = '';
   String locations = '';
   List<String> _lists = const [];
@@ -78,8 +79,11 @@ class ReminderExtractor {
   }
 
   Future<String> _generateGemini(String prompt) async {
+    final id = modelChoiceNotifier.value.cloudId ?? geminiModel;
+    if (_geminiId != id) _gemini = null;
+    _geminiId = id;
     _gemini ??= FirebaseAI.googleAI().generativeModel(
-      model: geminiModel,
+      model: id,
       systemInstruction: Content.system(_systemInstruction),
       generationConfig: GenerationConfig(
         temperature: 0.1,
@@ -87,8 +91,8 @@ class ReminderExtractor {
         responseMimeType: 'application/json',
       ),
     );
-    activeBackendNotifier.value = 'gemini';
-    debugPrint('Inference backend: gemini');
+    activeBackendNotifier.value = id;
+    debugPrint('Inference backend: $id');
     final response = await _gemini!.generateContent([Content.text(prompt)]);
     return response.text ?? '';
   }

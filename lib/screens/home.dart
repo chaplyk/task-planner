@@ -593,7 +593,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 key: _inputKey,
                 recording: _recording,
                 timeout: _timeout,
-                liveAi: model == LlmModel.gemini,
+                liveAi: model.isCloud,
                 refine: _safeExtract,
                 onSubmit: _onDraft,
                 onMicTap: _toggleRecording,
