@@ -20,6 +20,7 @@ void _snack(BuildContext context, String text, {VoidCallback? onUndo}) {
       SnackBar(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         content: Text(text),
+        persist: false, // with an action it would otherwise stay until dismissed
         action: onUndo == null ? null : SnackBarAction(label: 'Undo', onPressed: onUndo),
       ),
     );

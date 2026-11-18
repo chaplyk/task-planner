@@ -388,6 +388,7 @@ class _HomeScreenState extends State<HomeScreen> {
         SnackBar(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           content: Text('🔁  Saved routine: ${reminder.summary} · ${repeat.label.toLowerCase()}'),
+          persist: false, // with an action it would otherwise stay until dismissed
           action: SnackBarAction(label: 'Undo', onPressed: () => deleteRecurringById(id)),
         ),
       );
@@ -455,6 +456,7 @@ class _HomeScreenState extends State<HomeScreen> {
         SnackBar(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           content: Text('${triggerEmoji(reminder.triggerType)}  Saved: ${reminder.summary}'),
+          persist: false, // with an action it would otherwise stay until dismissed
           action: SnackBarAction(label: 'Undo', onPressed: () => deleteReminderById(id)),
         ),
       );
@@ -494,6 +496,7 @@ class _HomeScreenState extends State<HomeScreen> {
         SnackBar(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           content: Text(text),
+          persist: false, // with an action it would otherwise stay until dismissed
           action: action == null ? null : SnackBarAction(label: action, onPressed: onAction!),
         ),
       );

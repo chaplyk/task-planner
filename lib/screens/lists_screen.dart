@@ -93,6 +93,7 @@ class _ListsScreenState extends State<ListsScreen> {
         SnackBar(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           content: Text(text),
+          persist: false, // with an action it would otherwise stay until dismissed
           action: undo == null ? null : SnackBarAction(label: 'Undo', onPressed: undo),
         ),
       );

@@ -14,9 +14,6 @@ import 'place_picker.dart';
 
 const maxPlaces = 10;
 
-/// Saves the user's current position (GPS geofence) or Wi-Fi network as a named place.
-/// [initialName] pre-fills the name, e.g. a place mentioned in a reminder.
-/// Returns the saved name, or null if the user cancelled.
 /// What a new place is recognised by.
 enum PlaceKind { gps, wifi }
 
@@ -36,95 +33,53 @@ Future<String?> currentWifiName() async {
   }
 }
 
-/// [kind] given (the Saved Locations add menu): saves the current GPS position or Wi-Fi
-/// network after asking only for a name. Without it, asks for the name, then the kind.
+/// Saves a new named place and returns its name, or null if the user cancelled.
+/// [kind] given (the Saved Locations add menu, the unknown place sheet): goes straight to
+/// the map picker or the current Wi-Fi. Without it, offers both when the phone is on
+/// Wi-Fi, and otherwise opens the map. [initialName] pre-fills the name.
 Future<String?> addPlace(BuildContext context, {String? initialName, PlaceKind? kind}) async {
   if (kind != null) return _addPlaceOfKind(context, kind, initialName: initialName);
-  void snack(String text) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
-
-  final count = (await locationsCollection().count().get()).count ?? 0;
-  if (count >= maxPlaces) {
-    snack('You can only have up to $maxPlaces locations');
-    return null;
-  }
-
-  await requestBackgroundLocationPermission(context);
+  final wifi = await currentWifiName();
   if (!context.mounted) return null;
+  if (wifi == null) return _addPlaceOfKind(context, PlaceKind.gps, initialName: initialName);
 
-  // Fetch while the user types the name.
-  final positionFuture = Geolocator.getCurrentPosition()
-      .then<Position?>((p) => p)
-      .catchError((Object e) {
-    debugPrint('Position unavailable: $e');
-    return null;
-  });
-  final wifiFuture = NetworkInfo().getWifiName().catchError((Object e) {
-    debugPrint('Wi-Fi name unavailable: $e');
-    return null;
-  });
-
-  final name = await showTextInputDialog(
-    context,
-    title: 'Name current location:',
-    action: 'Next',
-    initial: initialName ?? '',
-    hintText: 'Location Name',
-  );
-  if (name == null) return null;
-  if (name.isEmpty) {
-    snack('Name cannot be empty');
-    return null;
-  }
-
-  final position = await positionFuture;
-  final wifi = await wifiFuture;
-  if (!context.mounted) return null;
-
-  final type = await showDialog<String>(
+  final picked = await showModalBottomSheet<PlaceKind>(
     context: context,
-    builder: (context) => SimpleDialog(
-      title: const Text('Choose Location Type'),
-      children: [
-        SimpleDialogOption(
-          onPressed: position == null ? null : () => Navigator.pop(context, 'gps'),
-          child: ListTile(
-            enabled: position != null,
-            leading: const Icon(Icons.location_on),
-            title: const Text('GPS Position'),
-            subtitle: Text(
-              position == null ? 'Unavailable' : '${position.latitude}, ${position.longitude}',
+    showDragHandle: true,
+    builder: (context) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Add a place', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+                icon: const Icon(Icons.add_location_alt_rounded),
+                label: const Text('Pin on the map'),
+                onPressed: () => Navigator.pop(context, PlaceKind.gps),
+              ),
             ),
-          ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.tonalIcon(
+                style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+                icon: const Icon(Icons.wifi_rounded),
+                label: Text('Use Wi-Fi “${wifiDisplayName(wifi)}”'),
+                onPressed: () => Navigator.pop(context, PlaceKind.wifi),
+              ),
+            ),
+          ],
         ),
-        SimpleDialogOption(
-          onPressed: wifi == null ? null : () => Navigator.pop(context, 'wifi'),
-          child: ListTile(
-            enabled: wifi != null,
-            leading: const Icon(Icons.wifi),
-            title: const Text('WiFi Network'),
-            subtitle: Text(wifi ?? 'Not connected'),
-          ),
-        ),
-      ],
+      ),
     ),
   );
-
-  if (type == 'wifi' && wifi != null) {
-    sendWrite(locationsCollection().doc().set({'name': name, 'wifi': wifi}));
-    return name;
-  }
-  if (type == 'gps' && position != null) {
-    final doc = locationsCollection().doc();
-    sendWrite(doc.set({
-      'name': name,
-      'latitude': position.latitude,
-      'longitude': position.longitude,
-    }));
-    await _registerGeofence(doc.id, position.latitude, position.longitude);
-    return name;
-  }
-  return null;
+  if (picked == null || !context.mounted) return null;
+  return _addPlaceOfKind(context, picked, initialName: initialName);
 }
 
 Future<void> _registerGeofence(String id, double latitude, double longitude) {

@@ -307,7 +307,7 @@ Future<void> startWatch() async {
 
   await FlutterForegroundTask.startService(
     serviceTypes: [ForegroundServiceTypes.location],
-    notificationTitle: 'NagadAI is running in background',
+    notificationTitle: 'Watching for your location reminders',
     notificationText: '',
     callback: startWatchCallback,
   );
