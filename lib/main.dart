@@ -3,8 +3,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:flutter_gemma/flutter_gemma.dart';
-import 'package:flutter_gemma_litertlm/flutter_gemma_litertlm.dart';
+import 'package:flutter_edge_ai/flutter_edge_ai.dart';
+import 'package:flutter_edge_ai_litertlm/flutter_edge_ai_litertlm.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:native_geofence/native_geofence.dart';
 
@@ -37,12 +37,13 @@ Future<void> main() async {
   // The rest each power one feature. A failure is reported and the app still opens.
   await _init('Google Sign-In', () => GoogleSignIn.instance.initialize());
   await _init('App Check', activateAppCheck);
-  await _init('Gemma', () => FlutterGemma.initialize(inferenceEngines: [LiteRtLmEngine()]));
+  await _init('Gemma', () => FlutterEdgeAi.initialize(inferenceEngines: [LiteRtLmEngine()]));
   await _init('model choice', loadModelChoice);
   await _init('theme', loadThemeMode);
   await _init('developer options', loadDeveloperOptions);
   await _init('calendar sync', loadCalendarSync);
   await _init('notifications', initNotifications);
+  await _init('notification taps', listenForNotificationTaps);
   // Notification permission is asked after the first reminder, not at launch.
   await _init('geofences', () => NativeGeofenceManager.instance.initialize());
   runApp(const MyApp());

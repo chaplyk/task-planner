@@ -36,7 +36,7 @@ Uri staticMapUri({
   final lonLat = '${lon.toStringAsFixed(6)},${lat.toStringAsFixed(6)}';
   final hex = pin.toARGB32().toRadixString(16).padLeft(8, '0').substring(2);
   return Uri.parse('$geoapifyMapsBase/staticmap').replace(queryParameters: {
-    'style': dark ? 'dark-matter' : 'positron',
+    'style': geoapifyMapStyle(dark: dark),
     'width': '$_mapWidth',
     'height': '$_mapHeight',
     'scaleFactor': '2',
@@ -88,12 +88,12 @@ Future<void> deletePlaceMaps(String placeId) async {
   }
 }
 
-/// Details of a saved place: its map (GPS) or network (Wi-Fi), the reminders that use
-/// it, and Delete. [reminders] are the open reminders tied to it; [onDelete] deletes it.
+/// Details of a saved place: its map (GPS) or network (Wi-Fi), and Delete.
+/// [reminderCount] open reminders use it (Delete warns about them); [onDelete] deletes it.
 Future<void> showPlaceDetails(
   BuildContext context, {
   required PlaceDoc place,
-  required List<String> reminders,
+  required int reminderCount,
   required Future<void> Function() onDelete,
   String? distance,
 }) {
@@ -102,18 +102,18 @@ Future<void> showPlaceDetails(
     isScrollControlled: true,
     showDragHandle: true,
     useSafeArea: true,
-    builder: (context) => _PlaceDetails(place: place, reminders: reminders, onDelete: onDelete, distance: distance),
+    builder: (context) => _PlaceDetails(place: place, reminderCount: reminderCount, onDelete: onDelete, distance: distance),
   );
 }
 
 class _PlaceDetails extends StatelessWidget {
-  const _PlaceDetails({required this.place, required this.reminders, required this.onDelete, this.distance});
+  const _PlaceDetails({required this.place, required this.reminderCount, required this.onDelete, this.distance});
 
   final PlaceDoc place;
 
   /// How far the user is, e.g. "2.4 km away"; null when unknown.
   final String? distance;
-  final List<String> reminders;
+  final int reminderCount;
   final Future<void> Function() onDelete;
 
   Future<void> _confirmDelete(BuildContext context) async {
@@ -123,9 +123,9 @@ class _PlaceDetails extends StatelessWidget {
       builder: (context) => AlertDialog(
         title: Text('Delete “$name”?'),
         content: Text(
-          reminders.isEmpty
+          reminderCount == 0
               ? 'It will be removed from your saved places.'
-              : '${reminders.length == 1 ? 'A reminder uses' : '${reminders.length} reminders use'} this place. '
+              : '${reminderCount == 1 ? 'A reminder uses' : '$reminderCount reminders use'} this place. '
                   'They won’t fire until you save a place with this name again.',
         ),
         actions: [
@@ -183,25 +183,6 @@ class _PlaceDetails extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 24),
-        Text('Reminders here', style: theme.textTheme.titleMedium),
-        const SizedBox(height: 4),
-        if (reminders.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text(
-              'No reminders use this place yet.',
-              style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
-            ),
-          )
-        else
-          for (final r in reminders)
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              leading: Icon(Icons.notifications_none_rounded, color: scheme.primary),
-              title: Text(r),
-            ),
-        const SizedBox(height: 16),
         OutlinedButton.icon(
           style: OutlinedButton.styleFrom(
             foregroundColor: scheme.error,

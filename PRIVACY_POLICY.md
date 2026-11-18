@@ -68,7 +68,7 @@ We do not sell your personal information, and we do not use your data for advert
 We do not sell your personal information and do not share it with advertisers. Your data is shared only with the following service providers, to the extent needed to run the App:
 
 - **Google** — Firebase Authentication and Firestore (account and reminder data), Gemini via Firebase AI Logic (reminder text, when the cloud model is used), Firebase Analytics, Crashlytics, Performance Monitoring and App Check, subject to [Google's Privacy Policy](https://policies.google.com/privacy).
-- **Geoapify** (Geoapify GmbH, Germany): receives your current coordinates (and, like any server, your IP address) for the nearby store lookups described above.
+- **Geoapify** (Geoapify GmbH, Germany): receives your current coordinates (and, like any server, your IP address) for the nearby store lookups described above. When you add a place on the map, it also receives the map area you are viewing (to show the map), the coordinates of the pin (to show its address) and any text you type into the place search (with the map's position, to rank the suggestions).
 
 ## Data Retention and Deletion
 

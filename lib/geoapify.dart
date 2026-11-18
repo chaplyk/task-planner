@@ -8,3 +8,48 @@ const geoapifyApiBase = 'https://api.geoapify.com/v2';
 const geoapifyMapsBase = 'https://maps.geoapify.com/v1';
 
 bool get geoapifyConfigured => geoapifyApiKey.isNotEmpty;
+
+const _geocodeBase = 'https://api.geoapify.com/v1/geocode';
+
+/// The map style for both the place picker and the place details minimap.
+String geoapifyMapStyle({required bool dark}) => dark ? 'dark-matter-dark-grey' : 'positron';
+
+/// Raster map tiles for flutter_map: `{r}` becomes "@2x" on high-density screens.
+String geoapifyTileUrl({required bool dark, String apiKey = geoapifyApiKey}) =>
+    '$geoapifyMapsBase/tile/${geoapifyMapStyle(dark: dark)}/{z}/{x}/{y}{r}.png?apiKey=$apiKey';
+
+/// Address suggestions for [text], ranked by closeness to [lat], [lon].
+Uri autocompleteUri(String text, {required double lat, required double lon, String apiKey = geoapifyApiKey}) =>
+    Uri.parse('$_geocodeBase/autocomplete').replace(queryParameters: {
+      'text': text,
+      'bias': 'proximity:${lon.toStringAsFixed(6)},${lat.toStringAsFixed(6)}',
+      'limit': '5',
+      'format': 'json',
+      'apiKey': apiKey,
+    });
+
+/// The address at a point.
+Uri reverseGeocodeUri({required double lat, required double lon, String apiKey = geoapifyApiKey}) =>
+    Uri.parse('$_geocodeBase/reverse').replace(queryParameters: {
+      'lat': lat.toStringAsFixed(6),
+      'lon': lon.toStringAsFixed(6),
+      'format': 'json',
+      'apiKey': apiKey,
+    });
+
+/// One geocoding result: [title] is the main line (place name or street and number),
+/// [name] is set only for named places (shops, landmarks).
+typedef GeocodeResult = ({String title, String? subtitle, String? name, double lat, double lon});
+
+/// Results of an autocomplete or reverse geocoding call made with `format=json`.
+List<GeocodeResult> parseGeocodeResults(Map<String, dynamic> json) => [
+  for (final r in (json['results'] as List?) ?? const [])
+    if (r is Map && r['lat'] is num && r['lon'] is num && (r['address_line1'] ?? r['formatted']) is String)
+      (
+        title: (r['address_line1'] ?? r['formatted']) as String,
+        subtitle: r['address_line2'] as String?,
+        name: r['name'] as String?,
+        lat: (r['lat'] as num).toDouble(),
+        lon: (r['lon'] as num).toDouble(),
+      ),
+];

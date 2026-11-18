@@ -8,9 +8,10 @@ import '../place_types.dart';
 import '../store_detection.dart';
 import '../store_log.dart';
 
-/// Debug: shows how store detection sees the current spot (the same lookup and visit
-/// check the background uses) and the live store log: refreshes, geofences, ENTER /
-/// DWELL / EXIT, GPS checks, vehicle state and notifications.
+/// Debug log: the live app log (model replies; store refreshes, geofences, ENTER / DWELL /
+/// EXIT, GPS checks, vehicle state and notifications), and a "Where am I?" button showing
+/// how store detection sees the current spot (the same lookup and visit check the
+/// background uses). The lookup runs only on request: each one is a billed Places call.
 class StoreDebugScreen extends StatefulWidget {
   const StoreDebugScreen({super.key});
 
@@ -30,7 +31,6 @@ class _StoreDebugScreenState extends State<StoreDebugScreen> {
   @override
   void initState() {
     super.initState();
-    _lookAround();
     _reloadLog();
     // The background writes to the log while this screen is open.
     _timer = Timer.periodic(const Duration(seconds: 2), (_) => _reloadLog());
@@ -90,19 +90,23 @@ class _StoreDebugScreenState extends State<StoreDebugScreen> {
     final mono = Theme.of(context).textTheme.bodySmall?.copyWith(fontFamily: 'monospace');
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Where am I?'),
+        title: const Text('Debug log'),
         actions: [
-          IconButton(
-            tooltip: 'Look again',
-            onPressed: _looking ? null : _lookAround,
-            icon: const Icon(Icons.my_location),
-          ),
           IconButton(tooltip: 'Clear log', onPressed: _clearLog, icon: const Icon(Icons.delete_sweep_outlined)),
         ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.tonalIcon(
+              onPressed: _looking ? null : _lookAround,
+              icon: const Icon(Icons.my_location),
+              label: const Text('Where am I?'),
+            ),
+          ),
+          const SizedBox(height: 8),
           if (_looking) const LinearProgressIndicator(),
           if (_positionError != null) Text('No position: $_positionError'),
           if (position != null)

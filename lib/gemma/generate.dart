@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import 'package:flutter_gemma/flutter_gemma.dart';
+import 'package:flutter_edge_ai/flutter_edge_ai.dart';
 
 final _random = Random();
 
@@ -13,9 +13,11 @@ const _prompt =
     'For example: "Remind me to call mom tomorrow evening" or "Remind me to stretch next time I go for a run".';
 
 Future<String> generateIdea() async {
-  final model = await FlutterGemma.getActiveModel(maxTokens: 1024);
-  final session = await model.createSession(
+  final model = await FlutterEdgeAi.getActiveModel(maxTokens: 1024);
+  final session = await model.openSession(
     temperature: 1.9,
+    // The default before flutter_edge_ai 2.2 (now it comes from the model file).
+    topK: 1,
     maxOutputTokens: 64,
     randomSeed: _random.nextInt(1 << 31),
   );

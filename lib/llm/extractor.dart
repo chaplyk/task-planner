@@ -4,12 +4,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_gemma/flutter_gemma.dart';
+import 'package:flutter_edge_ai/flutter_edge_ai.dart';
 
 import '../collections.dart';
 import '../gemma/download.dart';
 import '../models/reminder.dart';
 import '../place_types.dart';
+import '../store_log.dart';
 import 'model_choice.dart';
 
 const _systemInstruction =
@@ -21,6 +22,7 @@ final activeBackendNotifier = ValueNotifier<String>('not loaded');
 class ReminderExtractor {
   InferenceModel? _localModel;
   GenerativeModel? _gemini;
+  String? _geminiId; // the model id [_gemini] was made for
   String categories = '';
   String locations = '';
   List<String> _lists = const [];
@@ -41,7 +43,8 @@ class ReminderExtractor {
     _lists = await listNames.get();
 
     final output = await _generate(_prompt(transcript));
-    debugPrint('Model output: $output');
+    // Also on the Debug log screen. One line: the screen lists lines newest first.
+    unawaited(storeLog('Model (${activeBackendNotifier.value}): ${output.replaceAll(RegExp(r'\s*\n\s*'), ' ')}'));
     final reminder = _validList(Reminder.tryParse(output, transcript: transcript));
     if (reminder == null) {
       await FirebaseCrashlytics.instance.recordError(
@@ -78,8 +81,11 @@ class ReminderExtractor {
   }
 
   Future<String> _generateGemini(String prompt) async {
+    final id = modelChoiceNotifier.value.cloudId ?? geminiModel;
+    if (_geminiId != id) _gemini = null;
+    _geminiId = id;
     _gemini ??= FirebaseAI.googleAI().generativeModel(
-      model: geminiModel,
+      model: id,
       systemInstruction: Content.system(_systemInstruction),
       generationConfig: GenerationConfig(
         temperature: 0.1,
@@ -87,17 +93,20 @@ class ReminderExtractor {
         responseMimeType: 'application/json',
       ),
     );
-    activeBackendNotifier.value = 'gemini';
-    debugPrint('Inference backend: gemini');
+    activeBackendNotifier.value = id;
+    debugPrint('Inference backend: $id');
     final response = await _gemini!.generateContent([Content.text(prompt)]);
     return response.text ?? '';
   }
 
   Future<String> _generateLocal(String prompt) async {
-    _localModel ??= await FlutterGemma.getActiveModel(maxTokens: 1024);
+    _localModel ??= await FlutterEdgeAi.getActiveModel(maxTokens: 1024);
 
-    final session = await _localModel!.createSession(
+    final session = await _localModel!.openSession(
       temperature: 0.1,
+      // flutter_edge_ai 2.2+ takes unset sampling from the model file; keep the old
+      // greedy default so the JSON stays as predictable as before.
+      topK: 1,
       systemInstruction: _systemInstruction,
       maxOutputTokens: 256,
     );

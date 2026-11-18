@@ -1,9 +1,23 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-enum LlmModel { gemini, local }
+/// The model that turns text into reminders. Cloud models carry their Gemini model id.
+/// [gemini] keeps its old name because it is what users' saved choice refers to.
+enum LlmModel {
+  gemini('gemini-3.5-flash-lite'),
+  gemini38Flash('gemini-3.8-flash'),
+  geminiHydrogen('gemini-4-hydrogen'),
+  local(null);
 
-const geminiModel = 'gemini-3.5-flash-lite';
+  const LlmModel(this.cloudId);
+
+  final String? cloudId;
+
+  bool get isCloud => cloudId != null;
+}
+
+/// The default cloud model, also used for emoji and when the local model isn't ready.
+final geminiModel = LlmModel.gemini.cloudId!;
 
 const _prefKey = 'llm_model';
 

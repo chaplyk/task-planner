@@ -15,7 +15,7 @@ void main() {
     expect(light.toString(), contains('color%3A%2330628a'));
 
     final dark = staticMapUri(lat: 50.45, lon: 30.52, dark: true, pin: const Color(0xFFDAEBFF), apiKey: 'k');
-    expect(dark.queryParameters['style'], 'dark-matter');
+    expect(dark.queryParameters['style'], 'dark-matter-dark-grey');
   });
 
   test('distance labels', () {

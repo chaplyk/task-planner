@@ -4,8 +4,10 @@ import '../gemma/download.dart';
 import '../llm/model_choice.dart';
 
 String modelLabel(LlmModel model) => switch (model) {
-      LlmModel.gemini => 'Gemini (cloud)',
-      LlmModel.local => 'On-device (Gemma)',
+      LlmModel.gemini => 'Gemini 3.5 Flash-Lite (cloud)',
+      LlmModel.gemini38Flash => 'Gemini 3.8 Flash (cloud)',
+      LlmModel.geminiHydrogen => 'Gemini 4 Hydrogen (cloud)',
+      LlmModel.local => 'Gemma 4 E2B (local)',
     };
 
 class ModelScreen extends StatefulWidget {
@@ -47,6 +49,16 @@ class _ModelScreenState extends State<ModelScreen> {
                 title: Text(modelLabel(LlmModel.gemini)),
                 subtitle: const Text('Fast, requires internet'),
                 value: LlmModel.gemini,
+              ),
+              RadioListTile<LlmModel>(
+                title: Text(modelLabel(LlmModel.gemini38Flash)),
+                subtitle: const Text('Requires internet'),
+                value: LlmModel.gemini38Flash,
+              ),
+              RadioListTile<LlmModel>(
+                title: Text(modelLabel(LlmModel.geminiHydrogen)),
+                subtitle: const Text('Requires internet'),
+                value: LlmModel.geminiHydrogen,
               ),
               RadioListTile<LlmModel>(
                 title: Text(modelLabel(LlmModel.local)),

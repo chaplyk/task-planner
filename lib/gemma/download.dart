@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter_gemma/flutter_gemma.dart';
+import 'package:flutter_edge_ai/flutter_edge_ai.dart';
 
 const modelFile = 'gemma-4-E2B-it.litertlm';
 
@@ -11,7 +11,7 @@ final localModelDownload = ValueNotifier<int?>(null);
 
 Future<void>? _pendingDownload;
 
-Future<bool> isLocalModelInstalled() => FlutterGemma.isModelInstalled(modelFile);
+Future<bool> isLocalModelInstalled() => FlutterEdgeAi.isModelInstalled(modelFile);
 
 Future<void> downloadModel({void Function(int percent)? onProgress}) async {
   if (await isLocalModelInstalled()) {
@@ -19,7 +19,7 @@ Future<void> downloadModel({void Function(int percent)? onProgress}) async {
     return;
   }
 
-  await FlutterGemma.installModel(
+  await FlutterEdgeAi.installModel(
     modelType: ModelType.gemma4,
     fileType: ModelFileType.litertlm,
   )

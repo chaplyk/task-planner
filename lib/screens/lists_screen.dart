@@ -7,6 +7,7 @@ import '../models/reminder.dart';
 import '../permissions.dart';
 import '../reminders_repo.dart';
 import '../widgets/reminder_composer.dart';
+import '../widgets/reminder_details_sheet.dart';
 import '../widgets/reminder_tile.dart';
 import '../widgets/text_input_dialog.dart';
 
@@ -109,13 +110,13 @@ class _ListsScreenState extends State<ListsScreen> {
     if (mounted) _snack('Reopened: ${doc.data()['summary']}', undo: () => completeReminder(doc));
   }
 
-  Future<void> _delete(_Doc doc, {required bool done}) async {
+  Future<void> _delete(ReminderDoc doc, {required bool done}) async {
     setState(() => (done ? _hiddenDone : _hiddenOpen).add(doc.id));
     final data = await deleteReminder(doc);
     if (mounted && data != null) _snack('Deleted: ${data['summary']}', undo: () => restoreReminder(doc.id, data));
   }
 
-  Future<void> _edit(_Doc doc) async {
+  Future<void> _edit(ReminderDoc doc) async {
     final updated = await showReminderComposer(context, initial: reminderFromDoc(doc), title: 'Edit task');
     if (updated == null) return;
     await updateReminder(doc, updated);
@@ -406,7 +407,12 @@ class _ListsScreenState extends State<ListsScreen> {
         child: ReminderTile(
           data: doc.data(),
           done: done,
-          onTap: () => _edit(doc),
+          onTap: () => showReminderDetails(
+            context,
+            doc,
+            onEdit: _edit,
+            onDelete: (d) => _delete(d, done: d.data()?['status'] == 1),
+          ),
           onClearNotified: () => clearNotified(doc),
           onToggle: () => done ? _reopen(doc) : _complete(doc),
         ),

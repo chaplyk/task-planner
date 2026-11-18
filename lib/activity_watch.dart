@@ -26,16 +26,20 @@ const _wifiLossGrace = Duration(seconds: 30);
 /// The service wakes every [storeRefreshPeriod] (a developer option) to look up the
 /// stores near the user again and renew their geofences. Visits themselves are noticed
 /// by the geofences, not by polling. Wi-Fi places follow network change events.
-ForegroundTaskOptions _taskOptions(Duration period) => ForegroundTaskOptions(
+///
+/// It is a location service, which Android 14+ refuses to start without location access,
+/// and after a reboot (started from the background) only with "Allow all the time".
+ForegroundTaskOptions _taskOptions(Duration period, {required bool autoRunOnBoot}) => ForegroundTaskOptions(
       eventAction: ForegroundTaskEventAction.repeat(period.inMilliseconds),
-      autoRunOnBoot: true,
+      autoRunOnBoot: autoRunOnBoot,
     );
 
 /// Applies a changed [storeRefreshPeriod] to the running service, if any.
 Future<void> applyStoreRefreshPeriod() async {
   if (!await FlutterForegroundTask.isRunningService) return;
   final period = await storeRefreshPeriod();
-  await FlutterForegroundTask.updateService(foregroundTaskOptions: _taskOptions(period));
+  final always = await Geolocator.checkPermission() == LocationPermission.always;
+  await FlutterForegroundTask.updateService(foregroundTaskOptions: _taskOptions(period, autoRunOnBoot: always));
   FlutterForegroundTask.sendDataToTask('refresh');
 }
 
@@ -282,18 +286,27 @@ Future<void> _checkWifiReminders(
 
 /// Starts the background service if it isn't running. It stops by itself once no place
 /// reminder is waiting, so call this whenever one is created, reopened or re-armed.
+///
+/// Without location access it doesn't start: it couldn't read the Wi-Fi name or the
+/// position anyway, and Android 14+ rejects a location service without it.
 Future<void> startWatch() async {
   if (await FlutterForegroundTask.isRunningService) return;
+  final permission = await Geolocator.checkPermission();
+  if (permission != LocationPermission.always && permission != LocationPermission.whileInUse) return;
   FlutterForegroundTask.init(
     androidNotificationOptions: AndroidNotificationOptions(
       channelId: 'reminders_watch',
       channelName: 'Reminders Watch',
     ),
     iosNotificationOptions: const IOSNotificationOptions(),
-    foregroundTaskOptions: _taskOptions(await storeRefreshPeriod()),
+    foregroundTaskOptions: _taskOptions(
+      await storeRefreshPeriod(),
+      autoRunOnBoot: permission == LocationPermission.always,
+    ),
   );
 
   await FlutterForegroundTask.startService(
+    serviceTypes: [ForegroundServiceTypes.location],
     notificationTitle: 'NagadAI is running in background',
     notificationText: '',
     callback: startWatchCallback,
