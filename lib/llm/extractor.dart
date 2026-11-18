@@ -102,8 +102,11 @@ class ReminderExtractor {
   Future<String> _generateLocal(String prompt) async {
     _localModel ??= await FlutterEdgeAi.getActiveModel(maxTokens: 1024);
 
-    final session = await _localModel!.createSession(
+    final session = await _localModel!.openSession(
       temperature: 0.1,
+      // flutter_edge_ai 2.2+ takes unset sampling from the model file; keep the old
+      // greedy default so the JSON stays as predictable as before.
+      topK: 1,
       systemInstruction: _systemInstruction,
       maxOutputTokens: 256,
     );

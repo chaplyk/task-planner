@@ -14,8 +14,10 @@ const _prompt =
 
 Future<String> generateIdea() async {
   final model = await FlutterEdgeAi.getActiveModel(maxTokens: 1024);
-  final session = await model.createSession(
+  final session = await model.openSession(
     temperature: 1.9,
+    // The default before flutter_edge_ai 2.2 (now it comes from the model file).
+    topK: 1,
     maxOutputTokens: 64,
     randomSeed: _random.nextInt(1 << 31),
   );

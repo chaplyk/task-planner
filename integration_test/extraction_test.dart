@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter_gemma/flutter_gemma.dart';
-import 'package:flutter_gemma_litertlm/flutter_gemma_litertlm.dart';
+import 'package:flutter_edge_ai/flutter_edge_ai.dart';
+import 'package:flutter_edge_ai_litertlm/flutter_edge_ai_litertlm.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:nagadai/gemma/download.dart';
@@ -29,14 +29,14 @@ void main() {
   test('extracts a reminder with Gemini', timeout: Timeout.none, () async {
     modelChoiceNotifier.value = LlmModel.gemini;
     await runExtraction();
-    expect(activeBackendNotifier.value, 'gemini');
+    expect(activeBackendNotifier.value, geminiModel);
   });
 
   test('extracts a reminder with local model', timeout: Timeout.none, () async {
-    await FlutterGemma.initialize(inferenceEngines: [LiteRtLmEngine()]);
+    await FlutterEdgeAi.initialize(inferenceEngines: [LiteRtLmEngine()]);
     await downloadModel();
     modelChoiceNotifier.value = LlmModel.local;
     await runExtraction();
-    expect(activeBackendNotifier.value, isNot('gemini'));
+    expect(activeBackendNotifier.value, isNot(startsWith('gemini')));
   });
 }
