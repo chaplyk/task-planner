@@ -40,6 +40,12 @@ jobs:
       - name: Build AAB
         run: flutter build appbundle --release
 
+      # The watch app (android/wear) ships with every phone release: half of it lives in the
+      # phone app, and both take their version from the same pubspec build number.
+      - name: Build Wear OS AAB
+        working-directory: android
+        run: ./gradlew :wear:bundleRelease
+
       - name: Publish to Google Play
         uses: r0adkll/upload-google-play@v1
         with:
@@ -47,4 +53,14 @@ jobs:
           packageName: 'com.chaplyk.memory'
           releaseFile: 'build/app/outputs/bundle/release/app-release.aab'
           track: 'alpha'
+          status: 'completed'
+
+      # Needs Wear OS turned on in Play Console (Advanced settings > Form factors).
+      - name: Publish Wear OS app to Google Play
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: 'com.chaplyk.memory'
+          releaseFile: 'build/wear/outputs/bundle/release/wear-release.aab'
+          track: 'wear:internal'
           status: 'completed'

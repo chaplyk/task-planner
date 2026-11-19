@@ -1,4 +1,4 @@
-.PHONY: bump build build-release run
+.PHONY: bump build build-release run build-wear build-wear-release
 
 # Local, gitignored dart defines (e.g. APP_CHECK_DEBUG_TOKEN for debug builds)
 DART_DEFINES := $(if $(wildcard dart_defines.json),--dart-define-from-file=dart_defines.json)
@@ -17,3 +17,10 @@ build-release: bump
 
 run: bump
 	flutter run $(DART_DEFINES)
+
+# Wear OS companion (android/wear). Same applicationId and signing key as the phone app.
+build-wear:
+	cd android && ./gradlew :wear:assembleDebug
+
+build-wear-release:
+	cd android && ./gradlew :wear:bundleRelease

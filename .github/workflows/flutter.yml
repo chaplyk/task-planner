@@ -11,6 +11,7 @@ on:
     paths:
       - 'lib/**'
       - 'pubspec.*'
+      - 'android/**'
   workflow_dispatch: {}
 
 jobs:
@@ -46,6 +47,10 @@ jobs:
 
       - name: Build
         run: flutter build apk
+
+      - name: Build Wear OS app
+        working-directory: android
+        run: ./gradlew :wear:assembleRelease
 
       - name: Run Test Lab suite
         uses: w9jds/firebase-action@master

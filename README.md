@@ -33,3 +33,17 @@ To get to the app, your email needs to be added to the list of testers. Email me
    ```sh
    make run
    ```
+
+## Wear OS companion
+
+`android/wear` is a small watch app: a **New reminder** Tile with a mic button. Tap it, speak, and the
+text is sent to the phone, which parses and saves it like any other reminder, even if the app is closed.
+If the phone is out of range, Wear OS keeps the text and delivers it later.
+
+```sh
+make build-wear                     # build/wear/outputs/apk/debug/wear-debug.apk
+adb -s <watch> install -r build/wear/outputs/apk/debug/wear-debug.apk
+```
+
+The watch app must have the same application id **and signing key** as the phone app, or the two can't
+talk (use debug with debug or release with release). Add the Tile by long-pressing the watch face, or from the Wear OS app on the phone.

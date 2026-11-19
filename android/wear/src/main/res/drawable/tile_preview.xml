@@ -1,0 +1,15 @@
+<!-- Shown in the Tile picker: the mic button on black. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#FF000000"/>
+            <size android:width="192dp" android:height="192dp"/>
+        </shape>
+    </item>
+    <item android:gravity="center" android:width="80dp" android:height="80dp">
+        <shape android:shape="oval">
+            <solid android:color="#FF4F6BED"/>
+        </shape>
+    </item>
+    <item android:gravity="center" android:width="40dp" android:height="40dp" android:drawable="@drawable/ic_mic"/>
+</layer-list>
