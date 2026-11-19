@@ -16,6 +16,9 @@ import 'settings/theme_choice.dart';
 import 'notifications.dart';
 import 'screens/onboarding.dart';
 import 'screens/startup.dart';
+// Not used here: imported so watchReminderMain (run by WatchReminderWorker) is compiled in.
+// ignore: unused_import
+import 'watch_reminder.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

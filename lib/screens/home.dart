@@ -17,7 +17,6 @@ import '../llm/model_choice.dart';
 import '../models/reminder.dart';
 import '../notifications.dart';
 import '../permissions.dart';
-import '../place_types.dart';
 import '../models/recurrence.dart';
 import '../recurring_repo.dart';
 import '../reminders_repo.dart';
@@ -263,18 +262,9 @@ class _HomeScreenState extends State<HomeScreen> {
   /// case-insensitively; for an unknown place, offers to save it right now.
   /// Returns null when the user closes that sheet: the reminder is not saved.
   Future<Reminder?> _resolvePlace(Reminder r) async {
-    final place = r.location?.trim();
-    if (r.triggerType != 'location' || place == null || place.isEmpty) return r;
-
-    final saved = [
-      for (final d in (await locationsCollection().get()).docs) d.data()['name'] as String,
-    ];
-    final match = saved.where((s) => s.toLowerCase() == place.toLowerCase()).firstOrNull;
-    if (match != null) return _withPlace(r, match);
-    // "the supermarket" -> any grocery store, detected in the background with Google Places.
-    // Nearby categories only work on arrival: "when I leave the pharmacy" needs a saved place.
-    final store = r.locationEvent == 'exit' ? null : storeTypeFor(place);
-    if (store != null) return _withPlace(r, store);
+    final known = await matchKnownPlace(r);
+    if (known != null) return known;
+    final place = r.location!.trim();
     if (!mounted) return r;
 
     final leaving = r.locationEvent == 'exit';
@@ -339,7 +329,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     if (!mounted) return r;
 
-    if (choice == 'anytime') return _withPlace(r, null);
+    if (choice == 'anytime') return reminderAtPlace(r, null);
     // Closed without choosing: don't save the reminder.
     if (choice == null) return null;
     // A pin on the map (starting at the user's position) or the current Wi-Fi network.
@@ -347,29 +337,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return null;
     // Backed out of the map or the name: ask again rather than lose the reminder.
     if (name == null) return _resolvePlace(r);
-    return _withPlace(r, name);
-  }
-
-  /// Copy of [r] pointing at [place], or with no trigger when [place] is null.
-  Reminder _withPlace(Reminder r, String? place) {
-    final event = r.locationEvent ?? 'enter';
-    return Reminder(
-      summary: r.summary,
-      from: null,
-      condition: place == null
-          ? null
-          : isStoreType(place)
-          ? storeCondition(place)
-          : (event == 'exit' ? 'when I leave $place' : 'when I arrive at $place'),
-      transcript: r.transcript,
-      triggerType: place == null ? 'none' : 'location',
-      location: place,
-      locationEvent: place == null ? null : event,
-      category: r.category,
-      list: r.list,
-      confidence: r.confidence,
-      emoji: r.emoji,
-    );
+    return reminderAtPlace(r, name);
   }
 
   /// A recurring task from the smart input: saved as a routine instead of a reminder.

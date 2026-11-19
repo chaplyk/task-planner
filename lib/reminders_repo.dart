@@ -9,6 +9,7 @@ import 'collections.dart';
 import 'llm/emoji.dart';
 import 'models/reminder.dart';
 import 'notifications.dart';
+import 'place_types.dart';
 
 typedef ReminderDoc = DocumentSnapshot<Map<String, dynamic>>;
 
@@ -200,4 +201,45 @@ Future<void> deleteList(String listId, String name) async {
     batch.update(d.reference, {'list': null});
   }
   sendWrite(batch.commit());
+}
+
+/// Copy of [r] pointing at [place], or with no trigger when [place] is null.
+Reminder reminderAtPlace(Reminder r, String? place) {
+  final event = r.locationEvent ?? 'enter';
+  return Reminder(
+    summary: r.summary,
+    from: null,
+    condition: place == null
+        ? null
+        : isStoreType(place)
+        ? storeCondition(place)
+        : (event == 'exit' ? 'when I leave $place' : 'when I arrive at $place'),
+    transcript: r.transcript,
+    triggerType: place == null ? 'none' : 'location',
+    location: place,
+    locationEvent: place == null ? null : event,
+    category: r.category,
+    list: r.list,
+    confidence: r.confidence,
+    emoji: r.emoji,
+  );
+}
+
+/// Points a place reminder at a place the app can watch without asking the user:
+/// a saved place (names match case-insensitively) or a kind of store. Returns [r] as is
+/// when it has no place, and null when the place is unknown.
+Future<Reminder?> matchKnownPlace(Reminder r) async {
+  final place = r.location?.trim();
+  if (r.triggerType != 'location' || place == null || place.isEmpty) return r;
+
+  final saved = [
+    for (final d in (await locationsCollection().get()).docs) d.data()['name'] as String,
+  ];
+  final match = saved.where((s) => s.toLowerCase() == place.toLowerCase()).firstOrNull;
+  if (match != null) return reminderAtPlace(r, match);
+  // "the supermarket" -> any grocery store, detected in the background with Google Places.
+  // Nearby categories only work on arrival: "when I leave the pharmacy" needs a saved place.
+  final store = r.locationEvent == 'exit' ? null : storeTypeFor(place);
+  if (store != null) return reminderAtPlace(r, store);
+  return null;
 }

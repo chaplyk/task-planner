@@ -30,7 +30,8 @@ android {
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = maxOf(26, flutter.minSdkVersion)
         targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
+        // Phone builds are 100000 + the pubspec build number; the watch app (wear/) is 200000 + it.
+        versionCode = 100_000 + flutter.versionCode
         versionName = flutter.versionName
     }
 
@@ -66,4 +67,6 @@ dependencies {
     // Activity reminders: transition events (ActivityTransitions) handled in a background worker.
     implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("androidx.work:work-runtime-ktx:2.11.0")
+    // Reminders spoken on the watch arrive over the Wearable Data Layer.
+    implementation("com.google.android.gms:play-services-wearable:19.0.0")
 }
