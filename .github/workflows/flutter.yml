@@ -74,7 +74,7 @@ jobs:
         run: echo "${{ secrets.ANDROID_KEY_PROPERTIES }}" > android/key.properties
 
       - name: Build
-        run: flutter build apk
+        run: flutter build apk --dart-define=GEOAPIFY_API_KEY=${{ secrets.GEOAPIFY_API_KEY }}
 
       - name: Build Wear OS app
         working-directory: android

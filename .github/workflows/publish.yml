@@ -38,7 +38,7 @@ jobs:
         run: echo "${{ secrets.ANDROID_KEY_PROPERTIES }}" > android/key.properties
 
       - name: Build AAB
-        run: flutter build appbundle --release
+        run: flutter build appbundle --release --dart-define=GEOAPIFY_API_KEY=${{ secrets.GEOAPIFY_API_KEY }}
 
       # The watch app (android/wear) ships with every phone release: half of it lives in the
       # phone app, and both take their version from the same pubspec build number.
