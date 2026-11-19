@@ -15,7 +15,35 @@ on:
   workflow_dispatch: {}
 
 jobs:
+  # Merging a PR pushes a merge commit to main. When its files are exactly those of the
+  # merged branch's last commit, that code was already built and tested on its own push:
+  # skip the build (and the Test Lab run). If main had commits the branch didn't, the files
+  # differ and everything runs.
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      tested: ${{ steps.tree.outputs.tested }}
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 2 # the commit and its parents
+
+      - name: Compare with the merged commit
+        id: tree
+        run: |
+          if [ "${{ github.event_name }}" = "push" ] \
+            && git rev-parse -q --verify HEAD^2 >/dev/null \
+            && [ "$(git rev-parse 'HEAD^{tree}')" = "$(git rev-parse 'HEAD^2^{tree}')" ]; then
+            echo "Same files as $(git rev-parse --short HEAD^2), already tested: skipping the build."
+            echo "tested=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tested=false" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
+    needs: check
+    if: needs.check.outputs.tested != 'true'
     runs-on: ubuntu-latest
 
     steps:
