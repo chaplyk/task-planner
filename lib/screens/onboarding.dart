@@ -6,7 +6,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 import '../collections.dart';
 import '../settings/categories.dart';
-import '../widgets/onboarding_demo.dart';
+import '../widgets/onboarding_tour.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -48,52 +48,56 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
+  /// While a sign-in is under way: the buttons wait instead of starting another.
+  bool _busy = false;
+
+  Future<void> _run(Future<void> Function() signIn) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    await signIn();
+    // On success this screen is already being replaced.
+    if (mounted) setState(() => _busy = false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    return Scaffold(
-      backgroundColor: scheme.surface,
-      body: SafeArea(
-        child: LayoutBuilder(
-          // Scrolls only on screens too short for everything; otherwise it fills the height.
-          builder: (context, box) => SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: box.maxHeight - 32),
-              child: IntrinsicHeight(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Spacer(),
-                    Text('Say it once.\nForget about it.', style: theme.textTheme.headlineLarge),
-                    const SizedBox(height: 10),
-                    Text(
-                      'Tell NagadAI what to remember. It reminds you at the right time, place or moment.',
-                      style: theme.textTheme.bodyLarge?.copyWith(color: scheme.onSurfaceVariant),
+    return OnboardingTour(
+      onPage: (page) => FirebaseAnalytics.instance.logEvent(name: 'onboarding_page', parameters: {'index': page}),
+      onSkip: (page) => FirebaseAnalytics.instance.logEvent(name: 'onboarding_skip', parameters: {'from': page}),
+      signInActions: AnimatedOpacity(
+        opacity: _busy ? 0.5 : 1,
+        duration: const Duration(milliseconds: 200),
+        child: Column(
+          children: [
+            Center(
+              child: Semantics(
+                button: true,
+                label: 'Sign in with Google',
+                excludeSemantics: true,
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: InkWell(
+                    onTap: () => _run(_signIn),
+                    customBorder: const StadiumBorder(),
+                    child: Ink.image(
+                      image: const AssetImage('assets/images/google_signin_button.png'),
+                      width: 52 * 354 / 80,
+                      height: 52,
                     ),
-                    const SizedBox(height: 28),
-                    const OnboardingDemo(),
-                    const Spacer(flex: 2),
-                    SizedBox(
-                      width: double.infinity,
-                      child: Center(
-                        child: GestureDetector(
-                          onTap: _signIn,
-                          child: Image.asset('assets/images/google_signin_button.png', height: 48),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    SizedBox(
-                      width: double.infinity,
-                      child: TextButton(onPressed: _continueAsGuest, child: const Text('Continue as guest')),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
+            const SizedBox(height: 6),
+            TextButton(onPressed: () => _run(_continueAsGuest), child: const Text('Continue as guest')),
+            Text(
+              'As a guest, your reminders stay on this phone only.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+          ],
         ),
       ),
     );

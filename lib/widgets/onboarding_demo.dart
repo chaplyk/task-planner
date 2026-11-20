@@ -5,34 +5,45 @@ import 'package:material_ui/material_ui.dart';
 
 /// The onboarding demo: short scenes, one per kind of trigger, each ending with the
 /// reminder's notification sliding in: walking up to a grocery store, getting into a car
-/// and driving off, walking out of the office, a weekly routine running out, walking up
-/// to home, and a clock ticking to 6 PM.
+/// and driving off, pinning where you stand and walking away, a weekly routine running out, walking up
+/// to home, and a clock ticking to 6 PM. Given a [scene] and an [animation] that runs
+/// 0..1, it plays just that scene, driven from outside.
 class OnboardingDemo extends StatefulWidget {
-  const OnboardingDemo({super.key});
+  const OnboardingDemo({super.key, this.scene, this.animation, this.stageHeight = 210})
+    : assert((scene == null) == (animation == null), 'A scene comes with the animation that drives it');
+
+  /// The one scene to show; null plays them all in turn.
+  final DemoScene? scene;
+
+  /// Drives [scene] through one run.
+  final Animation<double>? animation;
+
+  final double stageHeight;
 
   @override
   State<OnboardingDemo> createState() => _OnboardingDemoState();
 }
 
 /// In the order they play.
-enum _Scene { place, drive, leave, routine, home, time }
+enum DemoScene { place, drive, leave, routine, home, time }
 
 const _said = {
-  _Scene.place: 'Buy milk when I’m at a grocery store',
-  _Scene.leave: 'Order dinner when I leave the office',
-  _Scene.drive: 'Fuel up the car next time I drive',
-  _Scene.routine: 'Water the plants every week',
-  _Scene.home: 'Pay bills when I get home',
-  _Scene.time: 'Call mom at 6 PM',
+  DemoScene.place: 'Buy milk when I’m at a grocery store',
+  DemoScene.leave: 'Grab my umbrella when I leave here',
+  DemoScene.drive: 'Fuel up the car next time I drive',
+  DemoScene.routine: 'Water the plants every week',
+  DemoScene.home: 'Pay bills when I get home',
+  DemoScene.time: 'Call mom at 6 PM',
 };
 
-const _notification = {
-  _Scene.place: ('🥛', 'Buy milk', 'You’re at FreshMart'),
-  _Scene.leave: ('🥡', 'Order dinner', 'You’re leaving the office'),
-  _Scene.drive: ('⛽', 'Fuel up the car', 'You started driving'),
-  _Scene.routine: ('🪴', 'Water the plants', 'Time for this week’s watering'),
-  _Scene.home: ('💳', 'Pay bills', 'You’re home'),
-  _Scene.time: ('📞', 'Call mom', 'It’s 6:00 PM'),
+/// The notification each scene ends with: emoji, title, body.
+const demoNotifications = {
+  DemoScene.place: ('🥛', 'Buy milk', 'You’re at FreshMart'),
+  DemoScene.leave: ('☂️', 'Grab your umbrella', 'You just left'),
+  DemoScene.drive: ('⛽', 'Fuel up the car', 'You started driving'),
+  DemoScene.routine: ('🪴', 'Water the plants', 'Time for this week’s watering'),
+  DemoScene.home: ('💳', 'Pay bills', 'You’re home'),
+  DemoScene.time: ('📞', 'Call mom', 'It’s 6:00 PM'),
 };
 
 /// When the notification starts sliding in, as a fraction of a scene.
@@ -48,9 +59,10 @@ class _OnboardingDemoState extends State<OnboardingDemo> with SingleTickerProvid
   @override
   void initState() {
     super.initState();
+    if (widget.scene != null) return;
     _controller.addStatusListener((status) {
       if (status != AnimationStatus.completed || !mounted) return;
-      setState(() => _index = (_index + 1) % _Scene.values.length);
+      setState(() => _index = (_index + 1) % DemoScene.values.length);
       _controller.forward(from: 0);
     });
     _controller.forward();
@@ -64,30 +76,33 @@ class _OnboardingDemoState extends State<OnboardingDemo> with SingleTickerProvid
 
   @override
   Widget build(BuildContext context) {
-    final scene = _Scene.values[_index];
+    final scene = widget.scene ?? DemoScene.values[_index];
+    final animation = widget.animation ?? _controller;
     final reduceMotion = MediaQuery.of(context).disableAnimations;
     return AnimatedBuilder(
-      animation: _controller,
+      animation: animation,
       builder: (context, _) {
-        final raw = _controller.value;
+        final raw = animation.value;
         // Without animations: each scene's end state, notification shown.
         final t = reduceMotion ? 0.95 : raw;
         // Fade in at the start of a scene and out at its end.
         final opacity = reduceMotion ? 1.0 : min(_seg(raw, 0, 0.06), 1 - _seg(raw, 0.94, 1));
-        return Opacity(
-          opacity: opacity,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Room for two lines, so a longer sentence doesn't push the scene down.
-              SizedBox(
-                height: 72,
-                child: Align(alignment: Alignment.bottomLeft, child: _SpeechBubble(text: _said[scene]!)),
+        // The stage's card stays put; what's in it fades.
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Room for two lines, so a longer sentence doesn't push the scene down.
+            SizedBox(
+              height: 72,
+              child: Align(
+                alignment: Alignment.bottomLeft,
+                child: Opacity(opacity: opacity, child: _SpeechBubble(text: _said[scene]!)),
               ),
-              const SizedBox(height: 12),
-              _Stage(scene: scene, t: t),
-            ],
-          ),
+            ),
+            const SizedBox(height: 12),
+            _Stage(scene: scene, t: t, opacity: opacity, height: widget.stageHeight),
+          ],
         );
       },
     );
@@ -133,34 +148,39 @@ class _SpeechBubble extends StatelessWidget {
 
 /// The scene's picture, its caption, and the notification over the top.
 class _Stage extends StatelessWidget {
-  const _Stage({required this.scene, required this.t});
+  const _Stage({required this.scene, required this.t, required this.opacity, required this.height});
 
-  final _Scene scene;
+  final DemoScene scene;
   final double t;
+  final double opacity;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
-      height: 210,
+      height: height,
       width: double.infinity,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(color: scheme.surfaceContainer, borderRadius: BorderRadius.circular(28)),
       child: LayoutBuilder(
         builder: (context, box) {
           final size = Size(box.maxWidth, box.maxHeight);
-          return Stack(
-            children: [
-              ...switch (scene) {
-                _Scene.place => _placeScene(context, size, 'FreshMart', Icons.storefront_rounded),
-                _Scene.home => _placeScene(context, size, 'Home', Icons.home_rounded),
-                _Scene.leave => _leaveScene(context, size),
-                _Scene.drive => _driveScene(context, size),
-                _Scene.routine => _routineScene(context, size),
-                _Scene.time => _timeScene(context, size),
-              },
-              _NotificationBanner(scene: scene, t: t),
-            ],
+          return Opacity(
+            opacity: opacity,
+            child: Stack(
+              children: [
+                ...switch (scene) {
+                  DemoScene.place => _placeScene(context, size, 'FreshMart', Icons.storefront_rounded),
+                  DemoScene.home => _placeScene(context, size, 'Home', Icons.home_rounded),
+                  DemoScene.leave => _leaveScene(context, size),
+                  DemoScene.drive => _driveScene(context, size),
+                  DemoScene.routine => _routineScene(context, size),
+                  DemoScene.time => _timeScene(context, size),
+                },
+                _NotificationBanner(scene: scene, t: t),
+              ],
+            ),
           );
         },
       ),
@@ -260,26 +280,71 @@ class _Stage extends StatelessWidget {
     ];
   }
 
-  // ---------------------------------------------------------------- leaving the office
+  // ---------------------------------------------------------------- leaving here
 
+  /// "When I leave here": the phone finds where it is, pins that spot, draws a zone around
+  /// it, and the reminder fires once the person walks out of it.
   List<Widget> _leaveScene(BuildContext context, Size size) {
     final scheme = Theme.of(context).colorScheme;
-    final office = Offset(size.width * 0.26, size.height * 0.6);
+    final spot = Offset(size.width * 0.28, size.height * 0.6);
     const zone = 52.0;
-    final walk = Curves.easeInOut.transform(_seg(t, 0.12, 0.72));
-    final person = Offset.lerp(Offset(office.dx + 30, office.dy), Offset(size.width - 34, office.dy), walk)!;
+    // Finding the position: two location pings ripple out.
+    final ping = _seg(t, 0.02, 0.2);
+    // The pin drops onto the spot, then the zone grows around it.
+    final drop = Curves.bounceOut.transform(_seg(t, 0.16, 0.3));
+    final grow = Curves.easeOutBack.transform(_seg(t, 0.28, 0.42));
+    final walk = Curves.easeInOut.transform(_seg(t, 0.44, 0.74));
+    final person = Offset.lerp(Offset(spot.dx + 22, spot.dy), Offset(size.width - 34, spot.dy), walk)!;
     final bob = walk > 0 && walk < 1 ? sin(t * 70).abs() * 3 : 0.0;
-    final inside = (person - office).distance < zone;
-    // Lit while still at the office; flashes as the person crosses its edge.
-    final flash = (1 - ((person - office).distance - zone).abs() / 24).clamp(0.0, 1.0);
+    final away = (person - spot).distance;
+    final inside = away < zone;
+    // Flashes as the person crosses its edge.
+    final flash = grow < 1 ? 0.0 : (1 - (away - zone).abs() / 24).clamp(0.0, 1.0);
+
+    final caption = t < 0.16
+        ? 'Finding where you are…'
+        : t < 0.28
+        ? 'Pinned this spot'
+        : walk == 0
+        ? 'Zone set around you'
+        : inside
+        ? 'Walking away'
+        : 'Left the zone';
 
     return [
-      _street(scheme, office.dy + 24),
-      _zone(scheme, office, zone * (1 + 0.12 * flash), lit: inside || flash > 0),
-      _placeIcon(scheme, office, Icons.business_rounded),
+      _street(scheme, spot.dy + 24),
+      for (final delay in [0.0, 0.4])
+        if (ping > delay && ping < 1) _ping(scheme, spot, ((ping - delay) / 0.6).clamp(0.0, 1.0)),
+      if (grow > 0) _zone(scheme, spot, zone * grow * (1 + 0.12 * flash), lit: inside || flash > 0),
+      if (drop > 0)
+        Positioned(
+          left: spot.dx - 18,
+          top: spot.dy - 36 - (1 - drop) * 70,
+          child: Opacity(
+            opacity: _seg(t, 0.16, 0.2),
+            child: Icon(Icons.location_on_rounded, size: 36, color: scheme.primary),
+          ),
+        ),
       _walker(scheme, person, bob),
-      _caption(context, inside ? 'At the office' : 'Leaving the office'),
+      _caption(context, caption),
     ];
+  }
+
+  /// A ring spreading out from [center] and fading, like a location fix being taken.
+  Widget _ping(ColorScheme scheme, Offset center, double p) {
+    final radius = 8 + p * 60;
+    return Positioned(
+      left: center.dx - radius,
+      top: center.dy - radius,
+      child: Container(
+        width: radius * 2,
+        height: radius * 2,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: scheme.primary.withValues(alpha: 0.6 * (1 - p)), width: 2),
+        ),
+      ),
+    );
   }
 
   Widget _street(ColorScheme scheme, double top) => Positioned(
@@ -464,48 +529,64 @@ class _LanePainter extends CustomPainter {
 class _NotificationBanner extends StatelessWidget {
   const _NotificationBanner({required this.scene, required this.t});
 
-  final _Scene scene;
+  final DemoScene scene;
   final double t;
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = Curves.easeOutBack.transform(_seg(t, _notifyAt, _notifyAt + 0.1));
+    if (shown == 0) return const SizedBox.shrink();
+    final (emoji, title, body) = demoNotifications[scene]!;
+    return Positioned(
+      left: 12,
+      right: 12,
+      top: lerpDouble(-80, 12, shown),
+      child: DemoNotificationCard(emoji: emoji, title: title, body: body),
+    );
+  }
+}
+
+/// A phone notification from the app, as the demo draws it.
+class DemoNotificationCard extends StatelessWidget {
+  const DemoNotificationCard({super.key, required this.emoji, required this.title, required this.body, this.time = 'now', this.elevation = 6});
+
+  final String emoji;
+  final String title;
+  final String body;
+  final String time;
+  final double elevation;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final shown = Curves.easeOutBack.transform(_seg(t, _notifyAt, _notifyAt + 0.1));
-    if (shown == 0) return const SizedBox.shrink();
-    final (emoji, title, body) = _notification[scene]!;
-    return Positioned(
-      left: 12,
-      right: 12,
-      top: lerpDouble(-80, 12, shown),
-      child: Material(
-        elevation: 6,
-        color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 14, 10),
-          child: Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(color: scheme.primaryContainer, shape: BoxShape.circle),
-                child: Text(emoji, style: const TextStyle(fontSize: 18)),
+    return Material(
+      elevation: elevation,
+      color: scheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(20),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 14, 10),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: scheme.primaryContainer, shape: BoxShape.circle),
+              child: Text(emoji, style: const TextStyle(fontSize: 18)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('NagadAI · $time', style: theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant)),
+                  Text(title, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+                  Text(body, style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('NagadAI · now', style: theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant)),
-                    Text(title, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
-                    Text(body, style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
